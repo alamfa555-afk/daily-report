@@ -168,35 +168,35 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
       </div>
 
       {/* Tables Container */}
-      <div className="overflow-x-auto rounded-3xl border border-slate-800 bg-slate-950/20">
+      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
         {activeTab === "deliveries" ? (
           <table className="min-w-full divide-y divide-slate-800/60 text-left">
             <thead className="bg-slate-950/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
               <tr>
-                <th className="px-4 py-3.5">MDR Slip</th>
-                <th className="px-4 py-3.5">Element Code</th>
-                <th className="px-4 py-3.5">Type</th>
-                <th className="px-4 py-3.5">Weight (T)</th>
-                <th className="px-4 py-3.5 mr-auto">Qty</th>
-                <th className="px-4 py-3.5">Total Weight</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5">Zone/Villa</th>
-                <th className="px-4 py-3.5">Equipment / Plate</th>
-                <th className="px-4 py-3.5">Date Received</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
+                <th className="px-3 py-2">MDR Slip</th>
+                <th className="px-3 py-2">Element Code</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Weight (T)</th>
+                <th className="px-3 py-2 text-center">Qty</th>
+                <th className="px-3 py-2">Total Weight</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Zone/Villa</th>
+                <th className="px-3 py-2">Equipment / Plate</th>
+                <th className="px-3 py-2">Date Received</th>
+                <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40 text-slate-300 text-xs">
+            <tbody className="divide-y divide-slate-800/40 text-slate-300 text-[11px]">
               {filteredDeliveries.length > 0 ? (
                 filteredDeliveries.map((d) => (
                   <tr key={d.id} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="px-4 py-4 font-extrabold text-white">{d.mdrNo}</td>
-                    <td className="px-4 py-4 font-mono font-bold text-blue-400">{d.elementCode}</td>
-                    <td className="px-4 py-4 text-slate-300">{d.elementType}</td>
-                    <td className="px-4 py-4 font-mono text-slate-400">{Number(d.weight).toFixed(3)}</td>
-                    <td className="px-4 py-4 text-center font-bold text-slate-200">{d.quantity}</td>
-                    <td className="px-4 py-4 font-mono font-bold text-emerald-400">{Number(d.totalWeight).toFixed(3)}</td>
-                    <td className="px-4 py-4">{renderStatus(d.status)}</td>
+                    <td className="px-3 py-2 font-extrabold text-white">{d.mdrNo}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-blue-400">{d.elementCode}</td>
+                    <td className="px-3 py-2 text-slate-300">{d.elementType}</td>
+                    <td className="px-3 py-2 font-mono text-slate-400">{Number(d.weight).toFixed(3)}</td>
+                    <td className="px-3 py-2 text-center font-bold text-slate-200">{d.quantity}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-emerald-400">{Number(d.totalWeight).toFixed(3)}</td>
+                    <td className="px-3 py-2">{renderStatus(d.status)}</td>
                     <td className="px-4 py-4 text-slate-300">
                       {d.zone || "-"} / {d.villaType || "-"}
                       <div className="text-[10px] text-slate-500">
@@ -271,44 +271,44 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
           <table className="min-w-full divide-y divide-slate-800/60 text-left">
             <thead className="bg-slate-950/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
               <tr>
-                <th className="px-4 py-3.5">Element Code</th>
-                <th className="px-4 py-3.5">Type</th>
-                <th className="px-4 py-3.5">Weight (T)</th>
-                <th className="px-4 py-3.5">Qty</th>
-                <th className="px-4 py-3.5">Total Weight</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5">Zone/Villa</th>
-                <th className="px-4 py-3.5">Erection Crane / Plate</th>
-                <th className="px-4 py-3.5">Erector / Supervisor</th>
-                <th className="px-4 py-3.5">Date Erected</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
+                <th className="px-3 py-2">Element Code</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Weight (T)</th>
+                <th className="px-3 py-2 text-center">Qty</th>
+                <th className="px-3 py-2">Total Weight</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Zone/Villa</th>
+                <th className="px-3 py-2">Erection Crane / Plate</th>
+                <th className="px-3 py-2">Erector / Supervisor</th>
+                <th className="px-3 py-2">Date Erected</th>
+                <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40 text-slate-300 text-xs">
+            <tbody className="divide-y divide-slate-800/40 text-slate-300 text-[11px]">
               {filteredErections.length > 0 ? (
                 filteredErections.map((e) => (
                   <tr key={e.id} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="px-4 py-4 font-mono font-bold text-purple-400">{e.elementCode}</td>
-                    <td className="px-4 py-4 text-slate-300">{e.elementType}</td>
-                    <td className="px-4 py-4 font-mono text-slate-400">{Number(e.weight).toFixed(3)}</td>
-                    <td className="px-4 py-4 text-center font-bold text-slate-200">{e.quantity}</td>
-                    <td className="px-4 py-4 font-mono font-bold text-emerald-400">{Number(e.totalWeight).toFixed(3)}</td>
-                    <td className="px-4 py-4">{renderStatus(e.status)}</td>
-                    <td className="px-4 py-4 text-slate-300">
+                    <td className="px-3 py-2 font-mono font-bold text-purple-400">{e.elementCode}</td>
+                    <td className="px-3 py-2 text-slate-300">{e.elementType}</td>
+                    <td className="px-3 py-2 font-mono text-slate-400">{Number(e.weight).toFixed(3)}</td>
+                    <td className="px-3 py-2 text-center font-bold text-slate-200">{e.quantity}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-emerald-400">{Number(e.totalWeight).toFixed(3)}</td>
+                    <td className="px-3 py-2">{renderStatus(e.status)}</td>
+                    <td className="px-3 py-2 text-slate-300">
                       {e.zone || "-"} / {e.villaType || "-"}
                       <div className="text-[10px] text-slate-500">
                         {e.buildingNo ? `B: ${e.buildingNo}` : ""} {e.houseNo ? `H: ${e.houseNo}` : ""}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-slate-300">
+                    <td className="px-3 py-2 text-slate-300">
                       <div>{e.erectionDetails?.equipmentType || "-"} ({e.erectionDetails?.capacity || 0}T)</div>
                       <div className="text-[10px] text-slate-500">Plate: {e.erectionDetails?.equipmentPlateNo || "-"}</div>
                     </td>
-                    <td className="px-4 py-4 text-slate-300">
+                    <td className="px-3 py-2 text-slate-300">
                       <div>{e.erectionDetails?.erectorName || "-"}</div>
                       <div className="text-[10px] text-slate-500">ID: {e.erectionDetails?.erectorId || "-"}</div>
                     </td>
-                    <td className="px-4 py-4 text-slate-500 font-mono">
+                    <td className="px-3 py-2 text-slate-500 font-mono">
                       {new Date(e.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4 text-right">
