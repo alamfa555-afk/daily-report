@@ -8,13 +8,17 @@ interface SiteSelectorProps {
   selectedSite: Site | null;
   onSelectSite: (site: Site) => void;
   loading: boolean;
+  selectedDate: string;
+  onSelectedDateChange: (date: string) => void;
 }
 
 export default function SiteSelector({
   sites,
   selectedSite,
   onSelectSite,
-  loading
+  loading,
+  selectedDate,
+  onSelectedDateChange
 }: SiteSelectorProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSiteNo, setNewSiteNo] = useState("");
@@ -76,7 +80,7 @@ export default function SiteSelector({
               Loading sites...
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={selectedSite?.id || ""}
                 onChange={(e) => {
@@ -92,6 +96,27 @@ export default function SiteSelector({
                   </option>
                 ))}
               </select>
+
+              {/* Date Selector Filter */}
+              <div className="flex items-center gap-2 bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wide">DATE:</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => onSelectedDateChange(e.target.value)}
+                  className="bg-transparent text-slate-100 font-bold focus:outline-none cursor-pointer outline-none border-0 p-0 text-xs [color-scheme:dark]"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectedDateChange("")}
+                    className="text-slate-500 hover:text-slate-300 font-bold px-1 text-xs cursor-pointer ml-1"
+                    title="Clear Date"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
 
               <button
                 type="button"

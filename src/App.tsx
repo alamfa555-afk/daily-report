@@ -30,8 +30,28 @@ export default function App() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [erections, setErections] = useState<Erection[]>([]);
   const [suggestionsMap, setSuggestionsMap] = useState<Record<string, string[]>>({});
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>("");
   
   const [activeFormTab, setActiveFormTab] = useState<"receive" | "erect">("receive");
+
+  // Dynamic filter for dashboard
+  const filteredDeliveriesForDashboard = useMemo(() => {
+    if (!selectedDateFilter) return deliveries;
+    return deliveries.filter(d => {
+      if (!d.createdAt) return false;
+      const recordDate = d.createdAt.split("T")[0]; // "YYYY-MM-DD"
+      return recordDate === selectedDateFilter;
+    });
+  }, [deliveries, selectedDateFilter]);
+
+  const filteredErectionsForDashboard = useMemo(() => {
+    if (!selectedDateFilter) return erections;
+    return erections.filter(e => {
+      if (!e.createdAt) return false;
+      const recordDate = e.createdAt.split("T")[0]; // "YYYY-MM-DD"
+      return recordDate === selectedDateFilter;
+    });
+  }, [erections, selectedDateFilter]);
   
   // Loaders
   const [loadingSites, setLoadingSites] = useState(true);
@@ -359,6 +379,8 @@ export default function App() {
           selectedSite={selectedSite}
           onSelectSite={setSelectedSite}
           loading={loadingSites}
+          selectedDate={selectedDateFilter}
+          onSelectedDateChange={setSelectedDateFilter}
         />
       </div>
 
@@ -368,8 +390,8 @@ export default function App() {
           
           {/* Main Key Figures Grid */}
           <StatsGrid
-            deliveries={deliveries}
-            erections={erections}
+            deliveries={filteredDeliveriesForDashboard}
+            erections={filteredErectionsForDashboard}
           />
 
           {/* Form Entries & Layouts */}
@@ -480,16 +502,16 @@ export default function App() {
 
           {/* Interactive Logs & Filtering Data-Tables */}
           <DataTable
-            deliveries={deliveries}
-            erections={erections}
+            deliveries={filteredDeliveriesForDashboard}
+            erections={filteredErectionsForDashboard}
             selectedSiteNo={selectedSite.siteNo}
           />
 
           {/* Reports generator, PDF Letterhead exports, CSV downloaders */}
           <ReportExport
             selectedSite={selectedSite}
-            deliveries={deliveries}
-            erections={erections}
+            deliveries={filteredDeliveriesForDashboard}
+            erections={filteredErectionsForDashboard}
           />
 
         </main>

@@ -240,7 +240,12 @@ export default function ErectionForm({
           },
           remarks: remarks.trim(),
           recordedBy: erectorName.trim() || "Site Erector",
-          createdAt: new Date().toISOString(),
+          createdAt: (() => {
+            const d = new Date(date);
+            const now = new Date();
+            d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+            return d.toISOString();
+          })(),
           updatedAt: new Date().toISOString()
         };
 

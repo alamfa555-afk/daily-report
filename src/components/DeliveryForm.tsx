@@ -254,7 +254,12 @@ export default function DeliveryForm({
           },
           remarks: remarks.trim(),
           recordedBy: unloaderName.trim() || "Site Receiver",
-          createdAt: new Date().toISOString(),
+          createdAt: (() => {
+            const d = new Date(date);
+            const now = new Date();
+            d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+            return d.toISOString();
+          })(),
           updatedAt: new Date().toISOString()
         };
 

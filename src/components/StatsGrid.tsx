@@ -15,9 +15,12 @@ export default function StatsGrid({ deliveries = [], erections = [] }: StatsGrid
   const totalErectedCount = erections.reduce((sum, e) => sum + (e.quantity || 1), 0);
   const totalErectedWeight = erections.reduce((sum, e) => sum + (e.totalWeight || 0), 0);
 
-  // Balance sitting on site awaiting erection
-  const balanceCount = Math.max(0, totalReceivedCount - totalErectedCount);
-  const balanceWeight = Math.max(0, totalReceivedWeight - totalErectedWeight);
+  // Balance sitting on site awaiting erection (Only good items should remain, exclude damaged and rejected)
+  const goodReceivedCount = deliveries.filter(d => d.status === "good").reduce((sum, d) => sum + (d.quantity || 1), 0);
+  const goodReceivedWeight = deliveries.filter(d => d.status === "good").reduce((sum, d) => sum + (d.totalWeight || 0), 0);
+
+  const balanceCount = Math.max(0, goodReceivedCount - totalErectedCount);
+  const balanceWeight = Math.max(0, goodReceivedWeight - totalErectedWeight);
 
   // Quality concerns
   const damagedReceived = deliveries.filter(d => d.status === "damage").reduce((sum, d) => sum + (d.quantity || 1), 0);
@@ -86,7 +89,9 @@ export default function StatsGrid({ deliveries = [], erections = [] }: StatsGrid
             Inventory
           </span>
         </div>
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Awaiting Erection</p>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+          Awaiting Erection <span className="text-[8px] text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded font-black font-mono">GOOD ONLY</span>
+        </p>
         <div className="mt-0.5 flex items-baseline gap-1">
           <span className="text-2xl font-black text-amber-400 tracking-tight drop-shadow-[0_0_8px_rgba(245,158,11,0.2)]">
             {balanceCount}

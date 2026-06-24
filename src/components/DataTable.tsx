@@ -83,7 +83,8 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
       d.elementCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.elementType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.zone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.villaType?.toLowerCase().includes(searchQuery.toLowerCase());
+      d.villaType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.trailerNo?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
 
@@ -170,10 +171,11 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
       {/* Tables Container */}
       <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/20">
         {activeTab === "deliveries" ? (
-          <table className="min-w-full divide-y divide-slate-800/60 text-left">
+          <table className="min-w-full divide-y divide-slate-800/60 text-left font-sans">
             <thead className="bg-slate-950/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
               <tr>
                 <th className="px-3 py-2">MDR Slip</th>
+                <th className="px-3 py-2">Trailer No.</th>
                 <th className="px-3 py-2">Element Code</th>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Weight (T)</th>
@@ -191,6 +193,20 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                 filteredDeliveries.map((d) => (
                   <tr key={d.id} className="hover:bg-slate-900/40 transition-colors">
                     <td className="px-3 py-2 font-extrabold text-white">{d.mdrNo}</td>
+                    <td className="px-3 py-2">
+                      {d.trailerNo ? (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery(d.trailerNo || "")}
+                          className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/25 rounded px-2 py-0.5 text-[9px] font-black tracking-wider uppercase transition-all"
+                          title="Click to filter by trailer"
+                        >
+                          {d.trailerNo}
+                        </button>
+                      ) : (
+                        <span className="text-slate-600">-</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-mono font-bold text-blue-400">{d.elementCode}</td>
                     <td className="px-3 py-2 text-slate-300">{d.elementType}</td>
                     <td className="px-3 py-2 font-mono text-slate-400">{Number(d.weight).toFixed(3)}</td>
