@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Construction, AlertTriangle, Boxes } from "lucide-react";
+import { Inbox, Construction, AlertTriangle, Boxes } from "lucide-react";
 import { Delivery, Erection } from "../types";
 
 interface StatsGridProps {
@@ -37,7 +37,7 @@ export default function StatsGrid({ deliveries = [], erections = [] }: StatsGrid
       <div className="backdrop-blur-md bg-slate-900/60 border border-emerald-500/25 p-3.5 rounded-xl shadow-xl hover:shadow-emerald-950/20 transition-all hover:translate-y-[-1px]">
         <div className="flex justify-between items-start mb-2">
           <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
-            <Download className="h-4 w-4" />
+            <Inbox className="h-4 w-4" />
           </div>
           <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
             MDR Receipts

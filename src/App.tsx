@@ -3,7 +3,7 @@ import {
   Building2, 
   ClipboardCopy, 
   Construction, 
-  ArrowDownToLine, 
+  Inbox, 
   Plus, 
   Sparkles,
   Database,
@@ -411,7 +411,7 @@ export default function App() {
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  <ArrowDownToLine className="h-3 w-3" />
+                  <Inbox className="h-3 w-3" />
                   MDR Slip (Received)
                 </button>
                 <button
@@ -448,6 +448,7 @@ export default function App() {
                     onSelectSite={setSelectedSite}
                     suggestions={mergedSuggestionsMap}
                     lastErection={lastErection}
+                    deliveries={deliveries}
                     onSuccess={() => console.log("Erection logged successfully")}
                   />
                 </div>

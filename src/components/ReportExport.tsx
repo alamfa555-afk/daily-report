@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { ListFilter, CalendarRange, Download, Printer, Percent, Info, Sparkles } from "lucide-react";
+import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent, Info, Sparkles } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Delivery, Erection, Site } from "../types";
 
 interface ReportExportProps {
@@ -188,6 +190,171 @@ export default function ReportExport({
     window.print();
   };
 
+  // Modern PDF Download Generator using jsPDF and jspdf-autotable
+  const handleDownloadPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+      
+      const primaryColor = [30, 41, 59]; // Slate 800
+      const blueColor = [37, 99, 235]; // Blue 600
+      const purpleColor = [126, 34, 206]; // Purple 700
+      const textDark = [15, 23, 42]; // Slate 900
+      
+      // Header band
+      doc.setFillColor(241, 245, 249); // Slate 100
+      doc.rect(0, 0, 210, 32, "F");
+      
+      // Left border accent
+      doc.setFillColor(37, 99, 235); // Blue 600
+      doc.rect(0, 0, 4, 32, "F");
+      
+      // Header details
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("ARA PRECAST CONSTRUCTION SYSTEM", 12, 13);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Precast Construction Receiving & Erection Field Office System", 12, 19);
+      doc.text(`Project Site No. ${selectedSite?.siteNo || "N/A"} (${selectedSite?.name || "N/A"})`, 12, 24);
+      
+      // Right header info
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]);
+      doc.text(selectedEmployeeName !== "all" ? "EMPLOYEE PROGRESS REPORT" : "FIELD AUDIT SUMMARY REPORT", 130, 13, { align: "left" });
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 130, 19);
+      doc.text(`Period: ${filterPeriod.toUpperCase()}`, 130, 24);
+      
+      if (selectedEmployeeName !== "all") {
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(purpleColor[0], purpleColor[1], purpleColor[2]);
+        doc.text(`Employee: ${selectedEmployeeName.toUpperCase()}`, 130, 29);
+      }
+      
+      // Key Performance Metrics section
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("KEY FIGURES & STOCK SUMMARY", 12, 42);
+      
+      // Draws 3 boxes for statistics
+      const drawStatBox = (x: number, title: string, value: string, sub: string, titleColor: number[]) => {
+        doc.setFillColor(248, 250, 252); // Slate 50
+        doc.rect(x, 46, 58, 24, "F");
+        doc.setDrawColor(226, 232, 240); // Slate 200
+        doc.setLineWidth(0.2);
+        doc.rect(x, 46, 58, 24, "S");
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(title, x + 4, 51);
+        
+        doc.setFontSize(10.5);
+        doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
+        doc.text(value, x + 4, 58);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(sub, x + 4, 65);
+      };
+      
+      drawStatBox(12, "TOTAL DELIVERIES RECEIVED", `${repDelQty} PCS / ${repDelWeight.toFixed(2)} T`, "* Includes damage/rejected logs", [16, 185, 129]);
+      drawStatBox(76, "TOTAL ASSEMBLY ERECTED", `${repEreQty} PCS / ${repEreWeight.toFixed(2)} T`, "* Registered final installations", [147, 51, 234]);
+      
+      const awaitingQty = Math.max(0, repGoodDelQty - repEreQty);
+      const awaitingWeight = Math.max(0, repGoodDelWeight - repEreWeight);
+      drawStatBox(140, "AWAITING ERECTION (GOOD)", `${awaitingQty} PCS / ${awaitingWeight.toFixed(2)} T`, "* Excludes damage/rejections", [217, 119, 6]);
+      
+      // Deliveries table
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text(`1. PRECAST DELIVERIES RECEIVED LOGS (${employeeFilteredData.deliveries.length} ITEMS)`, 12, 80);
+      
+      const deliveriesRows = employeeFilteredData.deliveries.map(d => [
+        d.mdrNo || "",
+        d.trailerNo || "",
+        d.elementCode || "",
+        d.elementType || "",
+        Number(d.weight).toFixed(2),
+        d.quantity || 1,
+        (d.status || "").toUpperCase(),
+        d.unloadingDetails?.equipmentPlateNo || d.unloadingDetails?.equipmentType || "",
+        new Date(d.createdAt).toLocaleDateString()
+      ]);
+      
+      autoTable(doc, {
+        startY: 84,
+        head: [["MDR Slip", "Trailer No", "Element Code", "Type", "Weight (T)", "Qty", "Status", "Crane/Equip", "Date"]],
+        body: deliveriesRows,
+        styles: { fontSize: 7, cellPadding: 1.5, font: "helvetica" },
+        headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 12, right: 12 }
+      });
+      
+      const nextY = (doc as any).lastAutoTable.finalY + 10;
+      
+      // Erections table
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text(`2. PRECAST ASSEMBLY & ERECTION LOGS (${employeeFilteredData.erections.length} ITEMS)`, 12, nextY);
+      
+      const erectionsRows = employeeFilteredData.erections.map(e => [
+        e.elementCode || "",
+        e.elementType || "",
+        Number(e.weight).toFixed(2),
+        e.quantity || 1,
+        Number(e.totalWeight).toFixed(2),
+        (e.status || "").toUpperCase(),
+        `${e.zone || ""}-${e.buildingNo || ""}`,
+        e.erectionDetails?.equipmentPlateNo || e.erectionDetails?.equipmentType || "",
+        new Date(e.createdAt).toLocaleDateString()
+      ]);
+      
+      autoTable(doc, {
+        startY: nextY + 4,
+        head: [["Element Code", "Type", "Weight (T)", "Qty", "Total (T)", "Status", "Zone/Bldg", "Equip/Plate", "Date"]],
+        body: erectionsRows,
+        styles: { fontSize: 7, cellPadding: 1.5, font: "helvetica" },
+        headStyles: { fillColor: [126, 34, 206], textColor: [255, 255, 255], fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 12, right: 12 }
+      });
+      
+      // Footer text on the last page
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${i} of ${pageCount} - ARA Precast Field Audit System`, 12, 287);
+        doc.text("CONFIDENTIAL - FOR INTERNAL PRECAST CONSTRUCTION RECORD KEEPING ONLY", 110, 287);
+      }
+      
+      // Save PDF Document
+      const siteNo = selectedSite?.siteNo || "All";
+      doc.save(`ARA_Precast_Report_Site_${siteNo}_${filterPeriod}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      setErrorNotice("Direct PDF download failed. Please try the Print Letterhead PDF option.");
+    }
+  };
+
   // Computations for report stats
   const repDelWeight = employeeFilteredData.deliveries.reduce((s, x) => s + (x.totalWeight || 0), 0);
   const repDelQty = employeeFilteredData.deliveries.reduce((s, x) => s + (x.quantity || 1), 0);
@@ -280,29 +447,42 @@ export default function ReportExport({
         </div>
 
         {/* Generate and trigger buttons */}
-        <div className="md:col-span-2 flex flex-wrap items-end gap-2">
+        <div className="md:col-span-2 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => handleDownloadCSV("deliveries")}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            title="Download deliveries received as CSV file"
           >
-            <Download className="h-3.5 w-3.5" />
-            Download Receivers CSV
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Receivers CSV
           </button>
 
           <button
             type="button"
             onClick={() => handleDownloadCSV("erections")}
-            className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            title="Download erections log as CSV file"
           >
-            <Download className="h-3.5 w-3.5" />
-            Download Erections CSV
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Erections CSV
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            title="Download complete high-fidelity PDF report"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Download PDF Report
           </button>
 
           <button
             type="button"
             onClick={handlePrintPDF}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+            title="Open browser print interface"
           >
             <Printer className="h-3.5 w-3.5" />
             Print Letterhead PDF

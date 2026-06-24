@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, Loader2, Save, Sparkles, CheckCircle2, AlertTriangle, X } from "lucide-react";
-import { Site, Erection, ElementStatus } from "../types";
+import { Site, Erection, ElementStatus, Delivery } from "../types";
 import { db, collection, doc, setDoc, handleFirestoreError, OperationType } from "../lib/firebase";
 import { saveSuggestion } from "../lib/suggestions";
 import CustomCombobox from "./CustomCombobox";
@@ -22,6 +22,7 @@ interface ErectionFormProps {
   suggestions: Record<string, string[]>;
   onSuccess: () => void;
   lastErection: Erection | null;
+  deliveries: Delivery[];
 }
 
 export default function ErectionForm({
@@ -30,7 +31,8 @@ export default function ErectionForm({
   onSelectSite,
   suggestions,
   onSuccess,
-  lastErection
+  lastErection,
+  deliveries = []
 }: ErectionFormProps) {
   const [loading, setLoading] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
@@ -196,6 +198,17 @@ export default function ErectionForm({
         setErrorList(`Please provide a unique Product Code for ${itemIndexLabel}.`);
         return;
       }
+
+      // Check if this item has been received at the selected site
+      const trimmedCode = item.elementCode.trim().toUpperCase();
+      const isReceived = deliveries.some(
+        (d) => d.elementCode.trim().toUpperCase() === trimmedCode && d.siteId === selectedSite.id
+      );
+      if (!isReceived) {
+        setErrorList(`WRONG ITEM ERROR: Element Code "${trimmedCode}" (${itemIndexLabel}) has NOT been received at this site. Erection is forbidden.`);
+        return;
+      }
+
       if (!item.weight || Number(item.weight) <= 0) {
         setErrorList(`Please provide a valid Unit Weight (Tons) for ${itemIndexLabel}.`);
         return;
