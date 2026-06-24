@@ -54,3 +54,27 @@
     margin: 0;
   }
 }
+
+/* Ensure all dashboard fonts are high contrast white for a stunning dark theme */
+@media screen {
+  .non-printable .text-slate-300,
+  .non-printable .text-slate-400,
+  .non-printable .text-slate-500 {
+    color: rgba(248, 250, 252, 0.95) !important; /* bright slate-50 / white */
+  }
+  .non-printable .text-slate-600,
+  .non-printable .text-slate-550 {
+    color: rgba(241, 245, 249, 0.8) !important;
+  }
+  .non-printable label {
+    color: #ffffff !important;
+  }
+  .non-printable p {
+    color: rgba(248, 250, 252, 0.9) !important;
+  }
+  .non-printable select,
+  .non-printable select option {
+    color: #ffffff !important;
+  }
+}
+

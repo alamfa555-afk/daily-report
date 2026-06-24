@@ -185,6 +185,48 @@ export default function ReportExport({
     return Array.from(summaryMap.values());
   }, [allDeliveries, allErections]);
 
+  // Extract unique employees for advanced search
+  const searchEmployees = useMemo(() => {
+    const empMap = new Map<string, { name: string; id: string }>();
+    
+    allDeliveries.forEach((d) => {
+      const u = d.unloadingDetails;
+      if (u && u.unloaderName) {
+        const key = u.unloaderName.trim().toUpperCase();
+        empMap.set(key, { name: u.unloaderName.trim(), id: u.unloaderId?.trim() || "" });
+      }
+    });
+
+    allErections.forEach((e) => {
+      const er = e.erectionDetails;
+      if (er && er.erectorName) {
+        const key = er.erectorName.trim().toUpperCase();
+        empMap.set(key, { name: er.erectorName.trim(), id: er.erectorId?.trim() || "" });
+      }
+    });
+
+    return Array.from(empMap.values());
+  }, [allDeliveries, allErections]);
+
+  // Extract unique dates for advanced search
+  const searchDates = useMemo(() => {
+    const datesSet = new Set<string>();
+    
+    allDeliveries.forEach((d) => {
+      if (d.createdAt) {
+        datesSet.add(d.createdAt.split("T")[0]);
+      }
+    });
+
+    allErections.forEach((e) => {
+      if (e.createdAt) {
+        datesSet.add(e.createdAt.split("T")[0]);
+      }
+    });
+
+    return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
+  }, [allDeliveries, allErections]);
+
   // Advanced search results
   const searchResults = useMemo(() => {
     if (!searchTriggered) return null;
@@ -747,10 +789,10 @@ export default function ReportExport({
             </div>
             <div className="flex gap-4 flex-wrap font-semibold">
               <div>
-                Received: <strong className="text-blue-400">{repDelWeight.toFixed(2)} T</strong> ({repDelQty} elements)
+                Received: <strong className="text-blue-400">{repDelQty} pcs</strong> ({repDelWeight.toFixed(2)} T)
               </div>
               <div>
-                Erected: <strong className="text-purple-400">{repEreWeight.toFixed(2)} T</strong> ({repEreQty} elements)
+                Erected: <strong className="text-purple-400">{repEreQty} pcs</strong> ({repEreWeight.toFixed(2)} T)
               </div>
             </div>
           </div>
@@ -813,11 +855,11 @@ export default function ReportExport({
                         <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-950/50 p-2 rounded-lg font-mono">
                           <div>
                             <span className="text-slate-500">Received:</span>{" "}
-                            <strong className="text-blue-400">{f.totalDelWeight.toFixed(2)} T</strong> ({f.totalDelQty} pcs)
+                            <strong className="text-blue-400">{f.totalDelQty} pcs</strong> ({f.totalDelWeight.toFixed(2)} T)
                           </div>
                           <div>
                             <span className="text-slate-500">Erected:</span>{" "}
-                            <strong className="text-purple-400">{f.totalEreWeight.toFixed(2)} T</strong> ({f.totalEreQty} pcs)
+                            <strong className="text-purple-400">{f.totalEreQty} pcs</strong> ({f.totalEreWeight.toFixed(2)} T)
                           </div>
                         </div>
                       </div>
@@ -857,13 +899,13 @@ export default function ReportExport({
                         <div className="grid grid-cols-2 gap-3">
                           <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
                             <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Deliveries</span>
-                            <span className="text-sm font-bold text-blue-400">{foreman.totalDelWeight.toFixed(2)} T</span>
-                            <span className="block text-[8px] text-slate-400">({foreman.totalDelQty} precast elements)</span>
+                            <span className="text-sm font-bold text-blue-400">{foreman.totalDelQty} pcs</span>
+                            <span className="block text-[8px] text-slate-400">({foreman.totalDelWeight.toFixed(2)} Tons)</span>
                           </div>
                           <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
                             <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Erections</span>
-                            <span className="text-sm font-bold text-purple-400">{foreman.totalEreWeight.toFixed(2)} T</span>
-                            <span className="block text-[8px] text-slate-400">({foreman.totalEreQty} precast elements)</span>
+                            <span className="text-sm font-bold text-purple-400">{foreman.totalEreQty} pcs</span>
+                            <span className="block text-[8px] text-slate-400">({foreman.totalEreWeight.toFixed(2)} Tons)</span>
                           </div>
                         </div>
 
@@ -939,38 +981,63 @@ export default function ReportExport({
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
                 1. Employee No. or Name
               </label>
-              <input
-                type="text"
-                placeholder="Enter ID or Name (e.g. EMP-101)"
+              <select
                 value={searchEmpId}
-                onChange={(e) => setSearchEmpId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-550 placeholder:font-normal"
-              />
+                onChange={(e) => {
+                  setSearchEmpId(e.target.value);
+                  setSearchTriggered(true);
+                }}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
+              >
+                <option value="">ALL EMPLOYEES ({searchEmployees.length})</option>
+                {searchEmployees.map((emp, i) => (
+                  <option key={i} value={emp.name}>
+                    {emp.name} {emp.id ? `(ID: ${emp.id})` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
                 2. Site No. / Name
               </label>
-              <input
-                type="text"
-                placeholder="Enter Site No (e.g. 1)"
+              <select
                 value={searchSiteNo}
-                onChange={(e) => setSearchSiteNo(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-550 placeholder:font-normal"
-              />
+                onChange={(e) => {
+                  setSearchSiteNo(e.target.value);
+                  setSearchTriggered(true);
+                }}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
+              >
+                <option value="">ALL SITES ({allSites.length})</option>
+                {allSites.map((s, i) => (
+                  <option key={i} value={s.siteNo}>
+                    Site No. {s.siteNo} {s.name ? `- ${s.name}` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
                 3. Select Specific Date
               </label>
-              <input
-                type="date"
+              <select
                 value={searchDate}
-                onChange={(e) => setSearchDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+                onChange={(e) => {
+                  setSearchDate(e.target.value);
+                  setSearchTriggered(true);
+                }}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
+              >
+                <option value="">ALL DATES ({searchDates.length})</option>
+                {searchDates.map((dateStr, i) => (
+                  <option key={i} value={dateStr}>
+                    {dateStr}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex gap-2">
@@ -1026,12 +1093,12 @@ export default function ReportExport({
                 <div className="flex gap-4 items-center flex-wrap">
                   <div className="text-right">
                     <div className="text-[10px] text-slate-500 uppercase font-mono">Total received</div>
-                    <div className="text-sm font-bold text-blue-400">{searchResults.totalDelWeight.toFixed(2)} T <span className="text-xs text-slate-400">({searchResults.totalDelQty} pcs)</span></div>
+                    <div className="text-sm font-bold text-blue-400">{searchResults.totalDelQty} pcs <span className="text-xs text-slate-400">({searchResults.totalDelWeight.toFixed(2)} T)</span></div>
                   </div>
                   <div className="h-8 w-[1px] bg-slate-800 hidden sm:block" />
                   <div className="text-right">
                     <div className="text-[10px] text-slate-500 uppercase font-mono">Total erected</div>
-                    <div className="text-sm font-bold text-purple-400">{searchResults.totalEreWeight.toFixed(2)} T <span className="text-xs text-slate-400">({searchResults.totalEreQty} pcs)</span></div>
+                    <div className="text-sm font-bold text-purple-400">{searchResults.totalEreQty} pcs <span className="text-xs text-slate-400">({searchResults.totalEreWeight.toFixed(2)} T)</span></div>
                   </div>
                   <button
                     type="button"

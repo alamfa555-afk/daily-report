@@ -575,25 +575,25 @@ export default function App() {
             <div className="border border-gray-300 rounded p-3">
               <span className="block text-gray-400 font-bold uppercase text-[9px] mb-1">TOTAL RECEIVED PRECAST</span>
               <span className="text-lg font-black text-blue-950">
-                {deliveries.reduce((s, x) => s + (x.totalWeight || 0), 0).toFixed(2)} Tons
+                {deliveries.reduce((s, x) => s + (x.quantity || 1), 0)} PCS
               </span>
-              <span className="block text-[10px] text-gray-400 font-medium">({deliveries.reduce((s, x) => s + (x.quantity || 1), 0)} items total)</span>
+              <span className="block text-[10px] text-gray-400 font-medium">({deliveries.reduce((s, x) => s + (x.totalWeight || 0), 0).toFixed(2)} Tons weight)</span>
             </div>
 
             <div className="border border-gray-300 rounded p-3">
               <span className="block text-gray-400 font-bold uppercase text-[9px] mb-1">TOTAL ERECTED PROGRESS</span>
               <span className="text-lg font-black text-purple-950">
-                {erections.reduce((s, x) => s + (x.totalWeight || 0), 0).toFixed(2)} Tons
+                {erections.reduce((s, x) => s + (x.quantity || 1), 0)} PCS
               </span>
-              <span className="block text-[10px] text-gray-400 font-medium">({erections.reduce((s, x) => s + (x.quantity || 1), 0)} items erected)</span>
+              <span className="block text-[10px] text-gray-400 font-medium">({erections.reduce((s, x) => s + (x.totalWeight || 0), 0).toFixed(2)} Tons weight)</span>
             </div>
 
             <div className="border border-gray-300 rounded p-3">
               <span className="block text-gray-400 font-bold uppercase text-[9px] mb-1">ON-SITE STOCK BALANCE</span>
               <span className="text-lg font-black text-indigo-950">
-                {(deliveries.reduce((s, x) => s + (x.totalWeight || 0), 0) - erections.reduce((s, x) => s + (x.totalWeight || 0), 0)).toFixed(2)} Tons
+                {deliveries.reduce((s, x) => s + (x.quantity || 1), 0) - erections.reduce((s, x) => s + (x.quantity || 1), 0)} PCS
               </span>
-              <span className="block text-[10px] text-gray-400 font-medium">({deliveries.reduce((s, x) => s + (x.quantity || 1), 0) - erections.reduce((s, x) => s + (x.quantity || 1), 0)} elements stored)</span>
+              <span className="block text-[10px] text-gray-400 font-medium">({(deliveries.reduce((s, x) => s + (x.totalWeight || 0), 0) - erections.reduce((s, x) => s + (x.totalWeight || 0), 0)).toFixed(2)} Tons weight)</span>
             </div>
           </div>
 
