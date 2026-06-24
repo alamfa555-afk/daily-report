@@ -5,6 +5,88 @@ import autoTable from "jspdf-autotable";
 import { Delivery, Erection, Site } from "../types";
 import { db, collection, getDocs, onSnapshot } from "../lib/firebase";
 
+const drawARALogo = (doc: any, x: number, y: number, width: number, height: number) => {
+  // Blue Background Arrow/Triangle
+  const pts1 = [
+    { x: x + width * (60 / 120), y: y + height * (6 / 100) },
+    { x: x + width * (102 / 120), y: y + height * (82 / 100) },
+    { x: x + width * (18 / 120), y: y + height * (82 / 100) }
+  ];
+  doc.setFillColor(27, 117, 188); // #1b75bc
+  doc.polygon(pts1, "F");
+
+  // Left A
+  const ptsLeftA = [
+    { x: x + width * (5 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (42 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (54 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (24 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (52 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  doc.polygon(ptsLeftA, "F");
+
+  // Left A cutout
+  const ptsLeftCutout = [
+    { x: x + width * (34 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (26 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (30 / 120), y: y + height * (52 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  doc.polygon(ptsLeftCutout, "F");
+
+  // Middle R
+  const ptsR = [
+    { x: x + width * (38 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (39 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (41.5 / 100) },
+    { x: x + width * (80 / 120), y: y + height * (46 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (50.5 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (53 / 100) },
+    { x: x + width * (57 / 120), y: y + height * (54 / 100) },
+    { x: x + width * (72 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (60 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (58 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (38 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  doc.polygon(ptsR, "F");
+
+  // Middle R Cutout
+  const ptsRCutout = [
+    { x: x + width * (48 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (48 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (48 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  doc.polygon(ptsRCutout, "F");
+
+  // Right A
+  const ptsRightA = [
+    { x: x + width * (66 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (94 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (115 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  doc.polygon(ptsRightA, "F");
+
+  // Right A cutout
+  const ptsRightCutout = [
+    { x: x + width * (82 / 120), y: y + height * (52 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (86 / 120), y: y + height * (63 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  doc.polygon(ptsRightCutout, "F");
+};
+
 interface ReportExportProps {
   selectedSite: Site | null;
   deliveries: Delivery[];
@@ -1184,7 +1266,7 @@ export default function ReportExport({
                                 delList.slice(0, 8).map((d, i) => (
                                   <div key={i} className="text-[9px] flex justify-between border-b border-slate-900 pb-1 font-mono">
                                     <span className="text-slate-300 font-bold">{d.elementCode}</span>
-                                    <span className="text-slate-400">{d.totalWeight.toFixed(2)} T</span>
+                                    <span className="text-slate-400">{d.quantity} pcs</span>
                                     <span className="text-slate-500">{new Date(d.createdAt).toLocaleDateString()}</span>
                                   </div>
                                 ))
@@ -1203,7 +1285,7 @@ export default function ReportExport({
                                 ereList.slice(0, 8).map((e, i) => (
                                   <div key={i} className="text-[9px] flex justify-between border-b border-slate-900 pb-1 font-mono">
                                     <span className="text-slate-300 font-bold">{e.elementCode}</span>
-                                    <span className="text-slate-400">{e.totalWeight.toFixed(2)} T</span>
+                                    <span className="text-slate-400">{e.quantity} pcs</span>
                                     <span className="text-slate-500">{new Date(e.createdAt).toLocaleDateString()}</span>
                                   </div>
                                 ))
@@ -1303,24 +1385,32 @@ export default function ReportExport({
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
-                4. Select Specific Date
-              </label>
-              <select
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  4. Select Specific Date
+                </label>
+                {searchDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchDate("");
+                      setSearchTriggered(true);
+                    }}
+                    className="text-[9px] text-amber-500 hover:text-amber-400 font-extrabold uppercase transition-all cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <input
+                type="date"
                 value={searchDate}
                 onChange={(e) => {
                   setSearchDate(e.target.value);
                   setSearchTriggered(true);
                 }}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
-              >
-                <option value="">ALL DATES ({searchDates.length})</option>
-                {searchDates.map((dateStr, i) => (
-                  <option key={i} value={dateStr}>
-                    {dateStr}
-                  </option>
-                ))}
-              </select>
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer [color-scheme:dark]"
+              />
             </div>
 
             <div className="flex gap-2">
@@ -1417,21 +1507,21 @@ export default function ReportExport({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Deliveries matching search */}
                 <div className="border border-slate-850 p-4 rounded-2xl bg-slate-950/10">
-                  <h6 className="text-[11px] font-black text-blue-400 uppercase tracking-wider mb-2">
+                  <h6 className="text-xs font-black text-blue-400 uppercase tracking-wider mb-2.5">
                     Matched precast deliveries received ({searchResults.deliveries.length})
                   </h6>
-                  <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin text-[10px] font-mono">
+                  <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin text-xs font-mono">
                     {searchResults.deliveries.length === 0 ? (
-                      <p className="text-slate-500 italic text-center py-6">No matching unloading deliveries found.</p>
+                      <p className="text-slate-500 italic text-center py-6 text-xs">No matching unloading deliveries found.</p>
                     ) : (
                       searchResults.deliveries.map((d, i) => (
-                        <div key={i} className="bg-slate-950/40 p-2 border border-slate-850/60 rounded-lg flex justify-between items-center">
+                        <div key={i} className="bg-slate-950/40 p-2.5 border border-slate-850/60 rounded-xl flex justify-between items-center transition-colors hover:bg-slate-900/40">
                           <div>
-                            <div className="font-bold text-white text-[11px]">{d.elementCode} ({d.elementType})</div>
-                            <div className="text-slate-500 text-[9px]">MDR: {d.mdrNo} | Receiver: {d.unloadingDetails?.unloaderName}</div>
+                            <div className="font-extrabold text-white text-[13px]">{d.elementCode} ({d.elementType})</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">MDR: {d.mdrNo} | Receiver: {d.unloadingDetails?.unloaderName}</div>
                           </div>
-                          <div className="text-right font-bold text-blue-400">
-                            {d.totalWeight.toFixed(2)} T
+                          <div className="text-right font-black text-sm text-blue-400">
+                            {d.quantity} pcs
                           </div>
                         </div>
                       ))
@@ -1441,21 +1531,21 @@ export default function ReportExport({
 
                 {/* Erections matching search */}
                 <div className="border border-slate-850 p-4 rounded-2xl bg-slate-950/10">
-                  <h6 className="text-[11px] font-black text-purple-400 uppercase tracking-wider mb-2">
+                  <h6 className="text-xs font-black text-purple-400 uppercase tracking-wider mb-2.5">
                     Matched precast erections ({searchResults.erections.length})
                   </h6>
-                  <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin text-[10px] font-mono">
+                  <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin text-xs font-mono">
                     {searchResults.erections.length === 0 ? (
-                      <p className="text-slate-500 italic text-center py-6">No matching erection records found.</p>
+                      <p className="text-slate-500 italic text-center py-6 text-xs">No matching erection records found.</p>
                     ) : (
                       searchResults.erections.map((e, i) => (
-                        <div key={i} className="bg-slate-950/40 p-2 border border-slate-850/60 rounded-lg flex justify-between items-center">
+                        <div key={i} className="bg-slate-950/40 p-2.5 border border-slate-850/60 rounded-xl flex justify-between items-center transition-colors hover:bg-slate-900/40">
                           <div>
-                            <div className="font-bold text-white text-[11px]">{e.elementCode} ({e.elementType})</div>
-                            <div className="text-slate-500 text-[9px]">Erector: {e.erectionDetails?.erectorName}</div>
+                            <div className="font-extrabold text-white text-[13px]">{e.elementCode} ({e.elementType})</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">Erector: {e.erectionDetails?.erectorName}</div>
                           </div>
-                          <div className="text-right font-bold text-purple-400">
-                            {e.totalWeight.toFixed(2)} T
+                          <div className="text-right font-black text-sm text-purple-400">
+                            {e.quantity} pcs
                           </div>
                         </div>
                       ))
@@ -1481,12 +1571,21 @@ export default function ReportExport({
                 <div>
                   {/* Beautiful Styled Company Vector Logo */}
                   <div className="flex items-center gap-3 mb-1.5">
-                    <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      {/* Upward pointed pyramid/arrow in Blue */}
-                      <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
-                      {/* Inner design representing the stylish 'ARA' */}
-                      <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
-                      <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                    <svg className="w-16 h-12" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Blue Background Arrow/Triangle */}
+                      <polygon points="60,6 102,82 18,82" fill="#1b75bc" />
+                      
+                      {/* Left A */}
+                      <path d="M 5,85 L 42,32 H 54 L 24,76 H 48 L 52,85 H 5 Z" fill="#2e3192" />
+                      <polygon points="34,63 26,63 30,52" fill="#ffffff" />
+                      
+                      {/* Middle R */}
+                      <path d="M 46,38 H 70 C 76,38 80,41 80,46 C 80,51 76,54 70,54 H 57 L 72,85 H 60 L 48,58 V 85 H 38 V 38 H 46 Z" fill="#2e3192" />
+                      <path d="M 48,44 V 48 H 66 C 68,44 68,44 66,44 H 48 Z" fill="#ffffff" />
+                      
+                      {/* Right A */}
+                      <path d="M 66,85 L 70,76 H 94 L 66,32 H 78 L 115,85 H 66 Z" fill="#2e3192" />
+                      <polygon points="82,52 78,63 86,63" fill="#ffffff" />
                     </svg>
                     <div>
                       <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
@@ -1504,13 +1603,19 @@ export default function ReportExport({
                     {selectedEmployeeName !== "all" ? "Employee Progress Report" : "Field Audit Report"}
                   </div>
                   {selectedEmployeeName !== "all" && (
-                    <div className="font-black text-xs text-purple-900 mt-0.5">
-                      EMPLOYEE: {selectedEmployeeName.toUpperCase()}
+                    <div className="mt-1">
+                      <span className="bg-amber-100 border border-amber-300 text-amber-950 px-2.5 py-1 rounded-md font-black text-xs uppercase inline-block">
+                        EMPLOYEE: {selectedEmployeeName.toUpperCase()}
+                      </span>
                     </div>
                   )}
-                  <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
-                  <div>Project Site: No. {selectedSite?.siteNo} ({selectedSite?.name})</div>
-                  <div>Report Period: {filterPeriod.toUpperCase()}</div>
+                  <div className="mt-1.5">Date Generated: {new Date().toLocaleDateString()}</div>
+                  <div className="mt-1">
+                    <span className="bg-blue-50 border border-blue-200 text-blue-950 px-2.5 py-1 rounded-md font-black text-xs inline-block">
+                      Project Site: No. {selectedSite?.siteNo} ({selectedSite?.name})
+                    </span>
+                  </div>
+                  <div className="mt-1">Report Period: {filterPeriod.toUpperCase()}</div>
                 </div>
               </div>
             </div>
@@ -1663,10 +1768,21 @@ export default function ReportExport({
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-3 mb-1.5">
-                        <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
-                          <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
-                          <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                        <svg className="w-16 h-12" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          {/* Blue Background Arrow/Triangle */}
+                          <polygon points="60,6 102,82 18,82" fill="#1b75bc" />
+                          
+                          {/* Left A */}
+                          <path d="M 5,85 L 42,32 H 54 L 24,76 H 48 L 52,85 H 5 Z" fill="#2e3192" />
+                          <polygon points="34,63 26,63 30,52" fill="#ffffff" />
+                          
+                          {/* Middle R */}
+                          <path d="M 46,38 H 70 C 76,38 80,41 80,46 C 80,51 76,54 70,54 H 57 L 72,85 H 60 L 48,58 V 85 H 38 V 38 H 46 Z" fill="#2e3192" />
+                          <path d="M 48,44 V 48 H 66 C 68,44 68,44 66,44 H 48 Z" fill="#ffffff" />
+                          
+                          {/* Right A */}
+                          <path d="M 66,85 L 70,76 H 94 L 66,32 H 78 L 115,85 H 66 Z" fill="#2e3192" />
+                          <polygon points="82,52 78,63 86,63" fill="#ffffff" />
                         </svg>
                         <div>
                           <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
@@ -1683,13 +1799,17 @@ export default function ReportExport({
                       <div className="font-bold text-sm text-blue-900 uppercase">
                         Supervisor performance summary
                       </div>
-                      <div className="font-black text-xs text-blue-800 mt-0.5 uppercase">
-                        FOREMAN: {printForemanName}
+                      <div className="mt-1">
+                        <span className="bg-amber-100 border border-amber-300 text-amber-950 px-2.5 py-1 rounded-md font-black text-xs uppercase inline-block">
+                          FOREMAN: {printForemanName?.toUpperCase()}
+                        </span>
                       </div>
-                      <div className="font-black text-xs text-indigo-900 mt-0.5 uppercase">
-                        SITE NO: {printForemanSiteNo || "N/A"}
+                      <div className="mt-1">
+                        <span className="bg-blue-50 border border-blue-200 text-blue-950 px-2.5 py-1 rounded-md font-black text-xs inline-block">
+                          SITE NO: {printForemanSiteNo || "N/A"}
+                        </span>
                       </div>
-                      <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                      <div className="mt-1.5">Date Generated: {new Date().toLocaleDateString()}</div>
                       <div>Scope: Site {printForemanSiteNo || "N/A"}</div>
                     </div>
                   </div>
@@ -1799,10 +1919,21 @@ export default function ReportExport({
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-3 mb-1.5">
-                    <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
-                      <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
-                      <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                    <svg className="w-16 h-12" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Blue Background Arrow/Triangle */}
+                      <polygon points="60,6 102,82 18,82" fill="#1b75bc" />
+                      
+                      {/* Left A */}
+                      <path d="M 5,85 L 42,32 H 54 L 24,76 H 48 L 52,85 H 5 Z" fill="#2e3192" />
+                      <polygon points="34,63 26,63 30,52" fill="#ffffff" />
+                      
+                      {/* Middle R */}
+                      <path d="M 46,38 H 70 C 76,38 80,41 80,46 C 80,51 76,54 70,54 H 57 L 72,85 H 60 L 48,58 V 85 H 38 V 38 H 46 Z" fill="#2e3192" />
+                      <path d="M 48,44 V 48 H 66 C 68,44 68,44 66,44 H 48 Z" fill="#ffffff" />
+                      
+                      {/* Right A */}
+                      <path d="M 66,85 L 70,76 H 94 L 66,32 H 78 L 115,85 H 66 Z" fill="#2e3192" />
+                      <polygon points="82,52 78,63 86,63" fill="#ffffff" />
                     </svg>
                     <div>
                       <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
@@ -1819,12 +1950,26 @@ export default function ReportExport({
                   <div className="font-bold text-sm text-blue-900 uppercase">
                     Employee Search & Progress Report
                   </div>
-                  <div className="font-black text-xs text-purple-900 mt-0.5">
-                    CRITERIA: {searchEmpId ? `Employee: ${searchEmpId.toUpperCase()}` : "Any Employee"}
-                    {searchSiteNo && ` | Site: ${searchSiteNo.toUpperCase()}`}
-                    {searchDate && ` | Date: ${searchDate}`}
+                  <div className="mt-1">
+                    {searchEmpId && (
+                      <span className="bg-amber-100 border border-amber-300 text-amber-950 px-2.5 py-1 rounded-md font-black text-xs uppercase inline-block mr-1">
+                        EMPLOYEE: {searchEmpId.toUpperCase()}
+                      </span>
+                    )}
+                    {searchSiteNo && (
+                      <span className="bg-blue-50 border border-blue-200 text-blue-950 px-2.5 py-1 rounded-md font-black text-xs inline-block">
+                        SITE NO: {searchSiteNo.toUpperCase()}
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                  {searchDate && (
+                    <div className="mt-1">
+                      <span className="bg-emerald-50 border border-emerald-200 text-emerald-950 px-2 py-0.5 rounded-md text-[10px] font-bold inline-block">
+                        Date: {searchDate}
+                      </span>
+                    </div>
+                  )}
+                  <div className="mt-1.5">Date Generated: {new Date().toLocaleDateString()}</div>
                 </div>
               </div>
             </div>

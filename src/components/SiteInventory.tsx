@@ -260,8 +260,17 @@ export default function SiteInventory({ sites, initialSelectedSite }: SiteInvent
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 18);
-      doc.text(`Active Site Reference: Site No. ${activeSite?.siteNo || "N/A"} - ${activeSite?.name || "N/A"}`, 12, 23);
+      doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 17);
+
+      // Highlight Active Site Reference beautifully with background pill
+      doc.setFillColor(239, 246, 255); // light blue
+      doc.setDrawColor(191, 219, 254); // border blue
+      doc.roundedRect(12, 21, 125, 7, 1, 1, "FD"); // rounded rect
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 58, 138); // deep blue
+      doc.text(`Active Site Reference: Site No. ${activeSite?.siteNo || "N/A"} - ${activeSite?.name || "N/A"}`, 15, 25.5);
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);

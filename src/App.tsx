@@ -335,14 +335,22 @@ export default function App() {
           
           {/* Logo vector + Company Names */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center shadow-lg relative overflow-hidden group">
-              <svg className="w-7 h-7 transition-transform duration-300 group-hover:scale-105" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Triangular blue pyramid */}
-                <path d="M50 12 L88 78 H12 L50 12 Z" fill="#3b82f6" />
-                {/* Internal stylized A letter white overlay */}
-                <path d="M37 56 H63 L50 32 Z" fill="#ffffff" />
-                {/* Deep purple base representing foundation */}
-                <path d="M26 73 H74 L50 61 Z" fill="#a855f7" />
+            <div className="w-12 h-10 bg-white/10 border border-white/20 rounded-lg flex items-center justify-center shadow-lg relative overflow-hidden group px-1">
+              <svg className="w-10 h-8 transition-transform duration-300 group-hover:scale-105" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Blue Background Arrow/Triangle */}
+                <polygon points="60,6 102,82 18,82" fill="#1b75bc" />
+                
+                {/* Left A */}
+                <path d="M 5,85 L 42,32 H 54 L 24,76 H 48 L 52,85 H 5 Z" fill="#2e3192" />
+                <polygon points="34,63 26,63 30,52" fill="#ffffff" />
+                
+                {/* Middle R */}
+                <path d="M 46,38 H 70 C 76,38 80,41 80,46 C 80,51 76,54 70,54 H 57 L 72,85 H 60 L 48,58 V 85 H 38 V 38 H 46 Z" fill="#2e3192" />
+                <path d="M 48,44 V 48 H 66 C 68,44 68,44 66,44 H 48 Z" fill="#ffffff" />
+                
+                {/* Right A */}
+                <path d="M 66,85 L 70,76 H 94 L 66,32 H 78 L 115,85 H 66 Z" fill="#2e3192" />
+                <polygon points="82,52 78,63 86,63" fill="#ffffff" />
               </svg>
             </div>
             
@@ -607,10 +615,21 @@ export default function App() {
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-3 mb-1.5">
-                  <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
-                    <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
-                    <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                  <svg className="w-16 h-12" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    {/* Blue Background Arrow/Triangle */}
+                    <polygon points="60,6 102,82 18,82" fill="#1b75bc" />
+                    
+                    {/* Left A */}
+                    <path d="M 5,85 L 42,32 H 54 L 24,76 H 48 L 52,85 H 5 Z" fill="#2e3192" />
+                    <polygon points="34,63 26,63 30,52" fill="#ffffff" />
+                    
+                    {/* Middle R */}
+                    <path d="M 46,38 H 70 C 76,38 80,41 80,46 C 80,51 76,54 70,54 H 57 L 72,85 H 60 L 48,58 V 85 H 38 V 38 H 46 Z" fill="#2e3192" />
+                    <path d="M 48,44 V 48 H 66 C 68,44 68,44 66,44 H 48 Z" fill="#ffffff" />
+                    
+                    {/* Right A */}
+                    <path d="M 66,85 L 70,76 H 94 L 66,32 H 78 L 115,85 H 66 Z" fill="#2e3192" />
+                    <polygon points="82,52 78,63 86,63" fill="#ffffff" />
                   </svg>
                   <div>
                     <h1 className="text-xl font-black text-blue-900 leading-none tracking-wider uppercase">
@@ -625,8 +644,12 @@ export default function App() {
               </div>
               <div className="text-right text-xs text-gray-650">
                 <div className="font-extrabold text-sm text-blue-900">PROJECT SITE STATUS SUMMARY</div>
-                <div>Date Generated: {new Date().toLocaleDateString()}</div>
-                <div className="font-bold">Active Site: {selectedSite.siteNo} - {selectedSite.name}</div>
+                <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                <div className="mt-1.5">
+                  <span className="bg-blue-50 border border-blue-200 text-blue-950 px-2.5 py-1 rounded-md font-black text-xs inline-block">
+                    Active Site: No. {selectedSite.siteNo} - {selectedSite.name}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
