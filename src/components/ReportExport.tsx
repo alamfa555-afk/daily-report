@@ -3,7 +3,7 @@ import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent,
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Delivery, Erection, Site } from "../types";
-import { db, collection, getDocs } from "../lib/firebase";
+import { db, collection, getDocs, onSnapshot } from "../lib/firebase";
 
 interface ReportExportProps {
   selectedSite: Site | null;
@@ -38,47 +38,52 @@ export default function ReportExport({
 
   const [printSource, setPrintSource] = useState<"standard" | "foreman" | "search">("standard");
   const [printForemanName, setPrintForemanName] = useState<string | null>(null);
+  const [printForemanSiteNo, setPrintForemanSiteNo] = useState<string | null>(null);
 
   useEffect(() => {
-    // Proactively load search data on mount
-    loadAllSearchData();
-  }, []);
-
-  const loadAllSearchData = async () => {
-    if (allSites.length > 0 && allDeliveries.length > 0 && allErections.length > 0) {
-      return;
-    }
     setLoadingSearchData(true);
-    try {
-      // Fetch sites
-      const sitesSnap = await getDocs(collection(db, "sites"));
+
+    // Real-time listener for sites
+    const unsubSites = onSnapshot(collection(db, "sites"), (snapshot) => {
       const sitesList: Site[] = [];
-      sitesSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         sitesList.push({ ...doc.data() as Site, id: doc.id });
       });
       setAllSites(sitesList);
+    }, (err) => {
+      console.error("Error loading sites in real-time:", err);
+    });
 
-      // Fetch deliveries
-      const delSnap = await getDocs(collection(db, "deliveries"));
+    // Real-time listener for deliveries
+    const unsubDeliveries = onSnapshot(collection(db, "deliveries"), (snapshot) => {
       const delList: Delivery[] = [];
-      delSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         delList.push({ ...doc.data() as Delivery, id: doc.id });
       });
       setAllDeliveries(delList);
+      setLoadingSearchData(false);
+    }, (err) => {
+      console.error("Error loading deliveries in real-time:", err);
+      setLoadingSearchData(false);
+    });
 
-      // Fetch erections
-      const ereSnap = await getDocs(collection(db, "erections"));
+    // Real-time listener for erections
+    const unsubErections = onSnapshot(collection(db, "erections"), (snapshot) => {
       const ereList: Erection[] = [];
-      ereSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         ereList.push({ ...doc.data() as Erection, id: doc.id });
       });
       setAllErections(ereList);
-    } catch (err) {
-      console.error("Error loading search data:", err);
-    } finally {
-      setLoadingSearchData(false);
-    }
-  };
+    }, (err) => {
+      console.error("Error loading erections in real-time:", err);
+    });
+
+    return () => {
+      unsubSites();
+      unsubDeliveries();
+      unsubErections();
+    };
+  }, []);
 
   // Get unique element types in deliveries and erections
   const uniqueElementTypes = useMemo(() => {
@@ -115,39 +120,44 @@ export default function ReportExport({
     return Array.from(empMap.values());
   }, [deliveries, erections]);
 
-  // Dynamic foreman summaries (Sare Foreman/Supervisor ka summary)
+  // Dynamic foreman summaries (Sare Foreman/Supervisor ka summary grouped by Site)
   const foremanSummaries = useMemo(() => {
+    const siteMap = new Map<string, string>();
+    allSites.forEach((s) => {
+      siteMap.set(s.id, s.siteNo);
+    });
+
     const summaryMap = new Map<string, {
       name: string;
       id: string;
+      siteNo: string;
       totalDelQty: number;
       totalDelWeight: number;
       totalEreQty: number;
       totalEreWeight: number;
-      sites: Set<string>;
       lastActive: string;
     }>();
 
     allDeliveries.forEach((d) => {
       const u = d.unloadingDetails;
       if (u && u.unloaderName) {
-        const key = u.unloaderName.trim().toUpperCase();
+        const foremanName = u.unloaderName.trim();
+        const siteNo = d.siteId ? (siteMap.get(d.siteId) || "N/A") : "N/A";
+        const key = `${foremanName.toUpperCase()}_${siteNo.toUpperCase()}`;
+
         const existing = summaryMap.get(key) || {
-          name: u.unloaderName.trim(),
+          name: foremanName,
           id: u.unloaderId?.trim() || "N/A",
+          siteNo: siteNo,
           totalDelQty: 0,
           totalDelWeight: 0,
           totalEreQty: 0,
           totalEreWeight: 0,
-          sites: new Set<string>(),
           lastActive: d.createdAt
         };
 
         existing.totalDelQty += d.quantity || 1;
         existing.totalDelWeight += d.totalWeight || d.weight || 0;
-        if (d.siteId) {
-          existing.sites.add(d.siteId);
-        }
         if (new Date(d.createdAt) > new Date(existing.lastActive)) {
           existing.lastActive = d.createdAt;
         }
@@ -161,23 +171,23 @@ export default function ReportExport({
     allErections.forEach((e) => {
       const er = e.erectionDetails;
       if (er && er.erectorName) {
-        const key = er.erectorName.trim().toUpperCase();
+        const foremanName = er.erectorName.trim();
+        const siteNo = e.siteId ? (siteMap.get(e.siteId) || "N/A") : "N/A";
+        const key = `${foremanName.toUpperCase()}_${siteNo.toUpperCase()}`;
+
         const existing = summaryMap.get(key) || {
-          name: er.erectorName.trim(),
+          name: foremanName,
           id: er.erectorId?.trim() || "N/A",
+          siteNo: siteNo,
           totalDelQty: 0,
           totalDelWeight: 0,
           totalEreQty: 0,
           totalEreWeight: 0,
-          sites: new Set<string>(),
           lastActive: e.createdAt
         };
 
         existing.totalEreQty += e.quantity || 1;
         existing.totalEreWeight += e.totalWeight || e.weight || 0;
-        if (e.siteId) {
-          existing.sites.add(e.siteId);
-        }
         if (new Date(e.createdAt) > new Date(existing.lastActive)) {
           existing.lastActive = e.createdAt;
         }
@@ -189,7 +199,7 @@ export default function ReportExport({
     });
 
     return Array.from(summaryMap.values());
-  }, [allDeliveries, allErections]);
+  }, [allDeliveries, allErections, allSites]);
 
   // Extract unique employees for advanced search
   const searchEmployees = useMemo(() => {
@@ -212,6 +222,29 @@ export default function ReportExport({
     });
 
     return Array.from(empMap.values());
+  }, [allDeliveries, allErections]);
+
+  // Map siteId to siteNo
+  const siteMap = useMemo(() => {
+    const map = new Map<string, string>();
+    allSites.forEach((s) => {
+      map.set(s.id, s.siteNo);
+    });
+    return map;
+  }, [allSites]);
+
+  // Extract unique element codes/types for search dropdown
+  const searchElements = useMemo(() => {
+    const elSet = new Set<string>();
+    allDeliveries.forEach((d) => {
+      if (d.elementCode) elSet.add(d.elementCode.trim());
+      if (d.elementType) elSet.add(d.elementType.trim());
+    });
+    allErections.forEach((e) => {
+      if (e.elementCode) elSet.add(e.elementCode.trim());
+      if (e.elementType) elSet.add(e.elementType.trim());
+    });
+    return Array.from(elSet).sort((a, b) => a.localeCompare(b));
   }, [allDeliveries, allErections]);
 
   // Extract unique dates for advanced search
@@ -639,9 +672,14 @@ export default function ReportExport({
   };
 
   // Modern Document PDF Print
-  const handlePrintPDF = (source: "standard" | "foreman" | "search" = "standard", foremanName: string | null = null) => {
+  const handlePrintPDF = (
+    source: "standard" | "foreman" | "search" = "standard", 
+    foremanName: string | null = null,
+    foremanSiteNo: string | null = null
+  ) => {
     setPrintSource(source);
     setPrintForemanName(foremanName);
+    setPrintForemanSiteNo(foremanSiteNo);
     setTimeout(() => {
       window.print();
     }, 200);
@@ -860,7 +898,6 @@ export default function ReportExport({
             type="button"
             onClick={() => {
               setActiveTab("foreman");
-              loadAllSearchData();
             }}
             className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
               activeTab === "foreman"
@@ -874,7 +911,6 @@ export default function ReportExport({
             type="button"
             onClick={() => {
               setActiveTab("search");
-              loadAllSearchData();
             }}
             className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
               activeTab === "search"
@@ -1049,37 +1085,40 @@ export default function ReportExport({
                       No foreman activity records found in the database.
                     </div>
                   ) : (
-                    foremanSummaries.map((f, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => setSelectedForemanDetail(f.name)}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-                          selectedForemanDetail === f.name
-                            ? "bg-blue-500/15 border-blue-500 shadow-md"
-                            : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-bold text-xs text-white">{f.name}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">ID: {f.id}</div>
+                    foremanSummaries.map((f, idx) => {
+                      const selectionKey = `${f.name}_${f.siteNo}`;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedForemanDetail(selectionKey)}
+                          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                            selectedForemanDetail === selectionKey
+                              ? "bg-blue-500/15 border-blue-500 shadow-md"
+                              : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-bold text-xs text-white">{f.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">ID: {f.id}</div>
+                            </div>
+                            <span className="text-[9px] font-bold text-amber-400 bg-slate-850 px-2 py-0.5 rounded uppercase">
+                              Site: {f.siteNo}
+                            </span>
                           </div>
-                          <span className="text-[9px] font-bold text-slate-400 bg-slate-850 px-2 py-0.5 rounded uppercase">
-                            {f.sites.size} site{f.sites.size !== 1 && "s"}
-                          </span>
+                          <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-950/50 p-2 rounded-lg font-mono">
+                            <div>
+                              <span className="text-slate-500">Received:</span>{" "}
+                              <strong className="text-blue-400">{f.totalDelQty} pcs</strong> ({f.totalDelWeight.toFixed(2)} T)
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Erected:</span>{" "}
+                              <strong className="text-purple-400">{f.totalEreQty} pcs</strong> ({f.totalEreWeight.toFixed(2)} T)
+                            </div>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-950/50 p-2 rounded-lg font-mono">
-                          <div>
-                            <span className="text-slate-500">Received:</span>{" "}
-                            <strong className="text-blue-400">{f.totalDelQty} pcs</strong> ({f.totalDelWeight.toFixed(2)} T)
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Erected:</span>{" "}
-                            <strong className="text-purple-400">{f.totalEreQty} pcs</strong> ({f.totalEreWeight.toFixed(2)} T)
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1088,22 +1127,29 @@ export default function ReportExport({
               <div className="lg:col-span-6 bg-slate-950/20 border border-slate-850 rounded-2xl p-4.5 space-y-4">
                 {selectedForemanDetail ? (
                   (() => {
-                    const foreman = foremanSummaries.find(f => f.name === selectedForemanDetail);
+                    const foremanKey = selectedForemanDetail;
+                    const foreman = foremanSummaries.find(f => `${f.name}_${f.siteNo}` === foremanKey);
                     if (!foreman) return null;
                     
-                    const delList = allDeliveries.filter(d => d.unloadingDetails?.unloaderName?.trim().toUpperCase() === selectedForemanDetail.toUpperCase());
-                    const ereList = allErections.filter(e => e.erectionDetails?.erectorName?.trim().toUpperCase() === selectedForemanDetail.toUpperCase());
+                    const delList = allDeliveries.filter(d => 
+                      d.unloadingDetails?.unloaderName?.trim().toUpperCase() === foreman.name.toUpperCase() &&
+                      (d.siteId ? siteMap.get(d.siteId) : "N/A") === foreman.siteNo
+                    );
+                    const ereList = allErections.filter(e => 
+                      e.erectionDetails?.erectorName?.trim().toUpperCase() === foreman.name.toUpperCase() &&
+                      (e.siteId ? siteMap.get(e.siteId) : "N/A") === foreman.siteNo
+                    );
 
                     return (
                       <div className="space-y-4">
                         <div className="flex justify-between items-start gap-4 flex-wrap border-b border-slate-800 pb-3">
                           <div>
                             <h5 className="text-sm font-black text-blue-400 uppercase tracking-tight">{foreman.name}</h5>
-                            <p className="text-[10px] text-slate-500 font-mono">Supervisor ID: {foreman.id}</p>
+                            <p className="text-[10px] text-slate-500 font-mono">Site No: {foreman.siteNo} | ID: {foreman.id}</p>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handlePrintPDF("foreman", foreman.name)}
+                            onClick={() => handlePrintPDF("foreman", foreman.name, foreman.siteNo)}
                             className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow"
                           >
                             <Printer className="h-3 w-3" />
@@ -1111,17 +1157,17 @@ export default function ReportExport({
                           </button>
                         </div>
 
-                        {/* Stats card */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
+                        {/* Stats card with compact font size 8/10 for density */}
+                        <div className="grid grid-cols-2 gap-3 text-[10px] leading-[13px]">
+                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2.5 text-center">
                             <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Deliveries</span>
-                            <span className="text-sm font-bold text-blue-400">{foreman.totalDelQty} pcs</span>
-                            <span className="block text-[8px] text-slate-400">({foreman.totalDelWeight.toFixed(2)} Tons)</span>
+                            <span className="text-xs font-bold text-blue-400">{foreman.totalDelQty} pcs</span>
+                            <span className="block text-[9px] text-slate-400">({foreman.totalDelWeight.toFixed(2)} Tons)</span>
                           </div>
-                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
+                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2.5 text-center">
                             <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Erections</span>
-                            <span className="text-sm font-bold text-purple-400">{foreman.totalEreQty} pcs</span>
-                            <span className="block text-[8px] text-slate-400">({foreman.totalEreWeight.toFixed(2)} Tons)</span>
+                            <span className="text-xs font-bold text-purple-400">{foreman.totalEreQty} pcs</span>
+                            <span className="block text-[9px] text-slate-400">({foreman.totalEreWeight.toFixed(2)} Tons)</span>
                           </div>
                         </div>
 
@@ -1239,16 +1285,21 @@ export default function ReportExport({
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
                 3. Element Code / Type
               </label>
-              <input
-                type="text"
+              <select
                 value={searchElementCode}
                 onChange={(e) => {
                   setSearchElementCode(e.target.value);
                   setSearchTriggered(true);
                 }}
-                placeholder="e.g. PC-201, Slab"
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2.5 text-xs text-white font-bold placeholder:text-slate-650 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
+              >
+                <option value="">ALL ELEMENTS ({searchElements.length})</option>
+                {searchElements.map((el, i) => (
+                  <option key={i} value={el}>
+                    {el}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -1277,7 +1328,6 @@ export default function ReportExport({
                 type="button"
                 onClick={() => {
                   setSearchTriggered(true);
-                  loadAllSearchData();
                 }}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs uppercase tracking-wider inline-flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
               >
@@ -1596,9 +1646,16 @@ export default function ReportExport({
 
         {printSource === "foreman" && printForemanName && (
           (() => {
-            const foreman = foremanSummaries.find(f => f.name === printForemanName);
-            const delList = allDeliveries.filter(d => d.unloadingDetails?.unloaderName?.trim().toUpperCase() === printForemanName.toUpperCase());
-            const ereList = allErections.filter(e => e.erectionDetails?.erectorName?.trim().toUpperCase() === printForemanName.toUpperCase());
+            const foremanKey = `${printForemanName}_${printForemanSiteNo}`;
+            const foreman = foremanSummaries.find(f => `${f.name}_${f.siteNo}` === foremanKey);
+            const delList = allDeliveries.filter(d => 
+              d.unloadingDetails?.unloaderName?.trim().toUpperCase() === printForemanName.toUpperCase() &&
+              (d.siteId ? siteMap.get(d.siteId) : "N/A") === printForemanSiteNo
+            );
+            const ereList = allErections.filter(e => 
+              e.erectionDetails?.erectorName?.trim().toUpperCase() === printForemanName.toUpperCase() &&
+              (e.siteId ? siteMap.get(e.siteId) : "N/A") === printForemanSiteNo
+            );
             
             return (
               <>
@@ -1626,11 +1683,14 @@ export default function ReportExport({
                       <div className="font-bold text-sm text-blue-900 uppercase">
                         Supervisor performance summary
                       </div>
-                      <div className="font-black text-xs text-blue-800 mt-0.5">
-                        FOREMAN: {printForemanName.toUpperCase()}
+                      <div className="font-black text-xs text-blue-800 mt-0.5 uppercase">
+                        FOREMAN: {printForemanName}
+                      </div>
+                      <div className="font-black text-xs text-indigo-900 mt-0.5 uppercase">
+                        SITE NO: {printForemanSiteNo || "N/A"}
                       </div>
                       <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
-                      <div>Scope: All Sites & All Dates</div>
+                      <div>Scope: Site {printForemanSiteNo || "N/A"}</div>
                     </div>
                   </div>
                 </div>
@@ -1650,12 +1710,12 @@ export default function ReportExport({
                   </div>
                 </div>
 
-                {/* Logs lists */}
+                {/* Logs lists with requested 8/10 font-size */}
                 <div className="mb-6">
                   <h4 className="text-xs font-bold text-blue-900 border-b border-blue-900 pb-1 mb-2 uppercase tracking-wide">
-                    1. Deliveries Received & Managed By {printForemanName} ({delList.length} items)
+                    1. Deliveries Received & Managed By {printForemanName} | Site: {printForemanSiteNo} ({delList.length} items)
                   </h4>
-                  <table className="w-full text-left text-[9px] border-collapse">
+                  <table className="w-full text-left text-[8px] leading-[10px] border-collapse">
                     <thead>
                       <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
                         <th className="p-1 px-2">MDR SLIP</th>
@@ -1684,7 +1744,7 @@ export default function ReportExport({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="p-2 text-center text-gray-400 italic">No unloading records found for this supervisor.</td>
+                          <td colSpan={7} className="p-2 text-center text-gray-400 italic">No unloading records found for this supervisor at this site.</td>
                         </tr>
                       )}
                     </tbody>
@@ -1693,9 +1753,9 @@ export default function ReportExport({
 
                 <div>
                   <h4 className="text-xs font-bold text-purple-900 border-b border-purple-900 pb-1 mb-2 uppercase tracking-wide">
-                    2. Precast Erections Handled By {printForemanName} ({ereList.length} items)
+                    2. Precast Erections Handled By {printForemanName} | Site: {printForemanSiteNo} ({ereList.length} items)
                   </h4>
-                  <table className="w-full text-left text-[9px] border-collapse">
+                  <table className="w-full text-left text-[8px] leading-[10px] border-collapse">
                     <thead>
                       <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
                         <th className="p-1 px-2">ELEMENT CODE</th>
@@ -1722,7 +1782,7 @@ export default function ReportExport({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="p-2 text-center text-gray-400 italic">No erection records found for this supervisor.</td>
+                          <td colSpan={6} className="p-2 text-center text-gray-400 italic">No erection records found for this supervisor at this site.</td>
                         </tr>
                       )}
                     </tbody>
