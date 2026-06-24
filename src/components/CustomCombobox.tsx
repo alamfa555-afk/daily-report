@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { saveSuggestion } from "../lib/suggestions";
 
 interface CustomComboboxProps {
@@ -96,13 +96,6 @@ export default function CustomCombobox({
           required={required}
           className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-150 shadow-sm"
         />
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          <ChevronDown className="h-3.5 w-3.5" />
-        </button>
       </div>
 
       {isOpen && filteredSuggestions.length > 0 && (

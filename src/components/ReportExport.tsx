@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent, Info, Sparkles } from "lucide-react";
+import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent, Info, Sparkles, Search, UserCheck } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Delivery, Erection, Site } from "../types";
+import { db, collection, getDocs } from "../lib/firebase";
 
 interface ReportExportProps {
   selectedSite: Site | null;
@@ -19,6 +20,59 @@ export default function ReportExport({
   const [selectedElementType, setSelectedElementType] = useState<string>("all");
   const [selectedEmployeeName, setSelectedEmployeeName] = useState<string>("all");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+
+  // New features state variables
+  const [activeTab, setActiveTab] = useState<"standard" | "foreman" | "search">("standard");
+  const [selectedForemanDetail, setSelectedForemanDetail] = useState<string | null>(null);
+  
+  const [searchEmpId, setSearchEmpId] = useState<string>("");
+  const [searchSiteNo, setSearchSiteNo] = useState<string>("");
+  const [searchDate, setSearchDate] = useState<string>("");
+  const [searchTriggered, setSearchTriggered] = useState<boolean>(false);
+
+  const [allSites, setAllSites] = useState<Site[]>([]);
+  const [allDeliveries, setAllDeliveries] = useState<Delivery[]>([]);
+  const [allErections, setAllErections] = useState<Erection[]>([]);
+  const [loadingSearchData, setLoadingSearchData] = useState<boolean>(false);
+
+  const [printSource, setPrintSource] = useState<"standard" | "foreman" | "search">("standard");
+  const [printForemanName, setPrintForemanName] = useState<string | null>(null);
+
+  const loadAllSearchData = async () => {
+    if (allSites.length > 0 && allDeliveries.length > 0 && allErections.length > 0) {
+      return;
+    }
+    setLoadingSearchData(true);
+    try {
+      // Fetch sites
+      const sitesSnap = await getDocs(collection(db, "sites"));
+      const sitesList: Site[] = [];
+      sitesSnap.forEach((doc) => {
+        sitesList.push({ ...doc.data() as Site, id: doc.id });
+      });
+      setAllSites(sitesList);
+
+      // Fetch deliveries
+      const delSnap = await getDocs(collection(db, "deliveries"));
+      const delList: Delivery[] = [];
+      delSnap.forEach((doc) => {
+        delList.push({ ...doc.data() as Delivery, id: doc.id });
+      });
+      setAllDeliveries(delList);
+
+      // Fetch erections
+      const ereSnap = await getDocs(collection(db, "erections"));
+      const ereList: Erection[] = [];
+      ereSnap.forEach((doc) => {
+        ereList.push({ ...doc.data() as Erection, id: doc.id });
+      });
+      setAllErections(ereList);
+    } catch (err) {
+      console.error("Error loading search data:", err);
+    } finally {
+      setLoadingSearchData(false);
+    }
+  };
 
   // Get unique element types in deliveries and erections
   const uniqueElementTypes = useMemo(() => {
@@ -54,6 +108,147 @@ export default function ReportExport({
 
     return Array.from(empMap.values());
   }, [deliveries, erections]);
+
+  // Dynamic foreman summaries (Sare Foreman/Supervisor ka summary)
+  const foremanSummaries = useMemo(() => {
+    const summaryMap = new Map<string, {
+      name: string;
+      id: string;
+      totalDelQty: number;
+      totalDelWeight: number;
+      totalEreQty: number;
+      totalEreWeight: number;
+      sites: Set<string>;
+      lastActive: string;
+    }>();
+
+    allDeliveries.forEach((d) => {
+      const u = d.unloadingDetails;
+      if (u && u.unloaderName) {
+        const key = u.unloaderName.trim().toUpperCase();
+        const existing = summaryMap.get(key) || {
+          name: u.unloaderName.trim(),
+          id: u.unloaderId?.trim() || "N/A",
+          totalDelQty: 0,
+          totalDelWeight: 0,
+          totalEreQty: 0,
+          totalEreWeight: 0,
+          sites: new Set<string>(),
+          lastActive: d.createdAt
+        };
+
+        existing.totalDelQty += d.quantity || 1;
+        existing.totalDelWeight += d.totalWeight || d.weight || 0;
+        if (d.siteId) {
+          existing.sites.add(d.siteId);
+        }
+        if (new Date(d.createdAt) > new Date(existing.lastActive)) {
+          existing.lastActive = d.createdAt;
+        }
+        if (u.unloaderId && existing.id === "N/A") {
+          existing.id = u.unloaderId.trim();
+        }
+        summaryMap.set(key, existing);
+      }
+    });
+
+    allErections.forEach((e) => {
+      const er = e.erectionDetails;
+      if (er && er.erectorName) {
+        const key = er.erectorName.trim().toUpperCase();
+        const existing = summaryMap.get(key) || {
+          name: er.erectorName.trim(),
+          id: er.erectorId?.trim() || "N/A",
+          totalDelQty: 0,
+          totalDelWeight: 0,
+          totalEreQty: 0,
+          totalEreWeight: 0,
+          sites: new Set<string>(),
+          lastActive: e.createdAt
+        };
+
+        existing.totalEreQty += e.quantity || 1;
+        existing.totalEreWeight += e.totalWeight || e.weight || 0;
+        if (e.siteId) {
+          existing.sites.add(e.siteId);
+        }
+        if (new Date(e.createdAt) > new Date(existing.lastActive)) {
+          existing.lastActive = e.createdAt;
+        }
+        if (er.erectorId && existing.id === "N/A") {
+          existing.id = er.erectorId.trim();
+        }
+        summaryMap.set(key, existing);
+      }
+    });
+
+    return Array.from(summaryMap.values());
+  }, [allDeliveries, allErections]);
+
+  // Advanced search results
+  const searchResults = useMemo(() => {
+    if (!searchTriggered) return null;
+
+    const normEmp = searchEmpId.trim().toLowerCase();
+    const normSite = searchSiteNo.trim().toLowerCase();
+    const normDate = searchDate.trim(); // YYYY-MM-DD
+
+    // Map searchSiteNo to site ID(s)
+    const matchingSites = allSites.filter(s => 
+      !normSite || 
+      s.siteNo.toLowerCase().includes(normSite) ||
+      s.name.toLowerCase().includes(normSite)
+    );
+    const matchingSiteIds = new Set(matchingSites.map(s => s.id));
+
+    const filteredDeliveries = allDeliveries.filter((d) => {
+      const u = d.unloadingDetails;
+      const matchesEmp = !normEmp || 
+        (u?.unloaderName?.toLowerCase().includes(normEmp)) || 
+        (u?.unloaderId?.toLowerCase().includes(normEmp));
+
+      const matchesSite = !normSite || matchingSiteIds.has(d.siteId);
+
+      let matchesDate = true;
+      if (normDate) {
+        const dDateStr = d.createdAt ? d.createdAt.split("T")[0] : "";
+        matchesDate = dDateStr === normDate;
+      }
+
+      return matchesEmp && matchesSite && matchesDate;
+    });
+
+    const filteredErections = allErections.filter((e) => {
+      const er = e.erectionDetails;
+      const matchesEmp = !normEmp || 
+        (er?.erectorName?.toLowerCase().includes(normEmp)) || 
+        (er?.erectorId?.toLowerCase().includes(normEmp));
+
+      const matchesSite = !normSite || matchingSiteIds.has(e.siteId);
+
+      let matchesDate = true;
+      if (normDate) {
+        const eDateStr = e.createdAt ? e.createdAt.split("T")[0] : "";
+        matchesDate = eDateStr === normDate;
+      }
+
+      return matchesEmp && matchesSite && matchesDate;
+    });
+
+    const totalDelWeight = filteredDeliveries.reduce((s, x) => s + (x.totalWeight || x.weight || 0), 0);
+    const totalDelQty = filteredDeliveries.reduce((s, x) => s + (x.quantity || 1), 0);
+    const totalEreWeight = filteredErections.reduce((s, x) => s + (x.totalWeight || x.weight || 0), 0);
+    const totalEreQty = filteredErections.reduce((s, x) => s + (x.quantity || 1), 0);
+
+    return {
+      deliveries: filteredDeliveries,
+      erections: filteredErections,
+      totalDelWeight,
+      totalDelQty,
+      totalEreWeight,
+      totalEreQty
+    };
+  }, [allSites, allDeliveries, allErections, searchEmpId, searchSiteNo, searchDate, searchTriggered]);
 
   // Determine date ranges
   const filteredData = useMemo(() => {
@@ -186,8 +381,12 @@ export default function ReportExport({
   };
 
   // Modern Document PDF Print
-  const handlePrintPDF = () => {
-    window.print();
+  const handlePrintPDF = (source: "standard" | "foreman" | "search" = "standard", foremanName: string | null = null) => {
+    setPrintSource(source);
+    setPrintForemanName(foremanName);
+    setTimeout(() => {
+      window.print();
+    }, 200);
   };
 
   // Modern PDF Download Generator using jsPDF and jspdf-autotable
@@ -380,303 +579,976 @@ export default function ReportExport({
         </div>
       )}
       {/* Upper header */}
-      <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <ListFilter className="h-4.5 w-4.5 text-blue-400" />
-        Site Reports & Exports Generator
-      </h3>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 border-b border-slate-800/60 pb-4">
+        <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+          <ListFilter className="h-4.5 w-4.5 text-blue-400" />
+          Precast Performance, Reports & Searches
+        </h3>
 
-      {/* Control Box: Filter Period, Element Type & Employee */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        <div>
-          <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">
-            Select Report Period
-          </label>
-          <div className="flex gap-1.5 p-1.5 bg-slate-950/70 border border-slate-800/85 rounded-xl">
-            {(["all", "daily", "weekly", "monthly"] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setFilterPeriod(p)}
-                className={`flex-1 text-[11px] font-bold py-2 rounded text-center uppercase tracking-wide transition-all cursor-pointer ${
-                  filterPeriod === p
-                    ? "bg-[#1e293b] text-blue-400 shadow-md border border-slate-750"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+        {/* Dynamic Tab Switchers */}
+        <div className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab("standard")}
+            className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+              activeTab === "standard"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Site Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("foreman");
+              loadAllSearchData();
+            }}
+            className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+              activeTab === "foreman"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Foreman summary
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("search");
+              loadAllSearchData();
+            }}
+            className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+              activeTab === "search"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Advanced search
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "standard" && (
+        <div className="space-y-4">
+          {/* Control Box: Filter Period, Element Type & Employee */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">
+                Select Report Period
+              </label>
+              <div className="flex gap-1.5 p-1.5 bg-slate-950/70 border border-slate-800/85 rounded-xl">
+                {(["all", "daily", "weekly", "monthly"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setFilterPeriod(p)}
+                    className={`flex-1 text-[11px] font-bold py-2 rounded text-center uppercase tracking-wide transition-all cursor-pointer ${
+                      filterPeriod === p
+                        ? "bg-[#1e293b] text-blue-400 shadow-md border border-slate-750"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {p === "all" ? "All" : p === "daily" ? "Daily" : p === "weekly" ? "Weekly" : "Monthly"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">
+                Filter Element Type
+              </label>
+              <select
+                value={selectedElementType}
+                onChange={(e) => setSelectedElementType(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer [&_option]:bg-slate-900"
               >
-                {p === "all" ? "All" : p === "daily" ? "Daily" : p === "weekly" ? "Weekly" : "Monthly"}
+                <option value="all">ALL ELEMENT TYPES ({uniqueElementTypes.length})</option>
+                {uniqueElementTypes.map((type, idx) => (
+                  <option key={idx} value={type}>
+                    {type.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                <span>Employee Progress</span>
+                <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1 py-0.2 rounded font-black font-mono">REPORT</span>
+              </label>
+              <select
+                value={selectedEmployeeName}
+                onChange={(e) => setSelectedEmployeeName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer [&_option]:bg-slate-900"
+              >
+                <option value="all">ALL EMPLOYEES ({uniqueEmployees.length})</option>
+                {uniqueEmployees.map((emp, idx) => (
+                  <option key={idx} value={emp.name}>
+                    {emp.name} {emp.id && emp.id !== "N/A" ? `(ID: ${emp.id})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Generate and trigger buttons */}
+            <div className="md:col-span-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownloadCSV("deliveries")}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+                title="Download deliveries received as CSV file"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Receivers CSV
               </button>
-            ))}
+
+              <button
+                type="button"
+                onClick={() => handleDownloadCSV("erections")}
+                className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+                title="Download erections log as CSV file"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Erections CSV
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+                title="Download complete high-fidelity PDF report"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Download PDF Report
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePrintPDF("standard")}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
+                title="Open browser print interface"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print Letterhead PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Quick summary of filtered data inside UI */}
+          <div className="bg-slate-950/40 rounded-2xl p-4.5 border border-slate-800 flex items-center justify-between gap-4 flex-wrap text-xs text-slate-300">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-blue-400 flex-shrink-0" />
+              <span>
+                Showing filtered summary for <strong>{selectedSite ? `Site No. ${selectedSite.siteNo}` : "all sites"}</strong> (
+                <strong>{filterPeriod.toUpperCase()}</strong> records with element: <strong>{selectedElementType.toUpperCase()}</strong>)
+              </span>
+            </div>
+            <div className="flex gap-4 flex-wrap font-semibold">
+              <div>
+                Received: <strong className="text-blue-400">{repDelWeight.toFixed(2)} T</strong> ({repDelQty} elements)
+              </div>
+              <div>
+                Erected: <strong className="text-purple-400">{repEreWeight.toFixed(2)} T</strong> ({repEreQty} elements)
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        <div>
-          <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">
-            Filter Element Type
-          </label>
-          <select
-            value={selectedElementType}
-            onChange={(e) => setSelectedElementType(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer [&_option]:bg-slate-900"
-          >
-            <option value="all">ALL ELEMENT TYPES ({uniqueElementTypes.length})</option>
-            {uniqueElementTypes.map((type, idx) => (
-              <option key={idx} value={type}>
-                {type.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1">
-            <span>Employee Progress</span>
-            <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1 py-0.2 rounded font-black font-mono">REPORT</span>
-          </label>
-          <select
-            value={selectedEmployeeName}
-            onChange={(e) => setSelectedEmployeeName(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer [&_option]:bg-slate-900"
-          >
-            <option value="all">ALL EMPLOYEES ({uniqueEmployees.length})</option>
-            {uniqueEmployees.map((emp, idx) => (
-              <option key={idx} value={emp.name}>
-                {emp.name} {emp.id && emp.id !== "N/A" ? `(ID: ${emp.id})` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Generate and trigger buttons */}
-        <div className="md:col-span-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => handleDownloadCSV("deliveries")}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
-            title="Download deliveries received as CSV file"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Receivers CSV
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleDownloadCSV("erections")}
-            className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
-            title="Download erections log as CSV file"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Erections CSV
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownloadPDF}
-            className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
-            title="Download complete high-fidelity PDF report"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Download PDF Report
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrintPDF}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-2.5 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md text-center"
-            title="Open browser print interface"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Print Letterhead PDF
-          </button>
-        </div>
-      </div>
-
-      {/* Quick summary of filtered data inside UI */}
-      <div className="bg-slate-950/40 rounded-2xl p-4.5 border border-slate-800 flex items-center justify-between gap-4 flex-wrap text-xs text-slate-300">
-        <div className="flex items-center gap-2">
-          <Info className="h-4 w-4 text-blue-400 flex-shrink-0" />
-          <span>
-            Showing filtered summary for <strong>{selectedSite ? `Site No. ${selectedSite.siteNo}` : "all sites"}</strong> (
-            <strong>{filterPeriod.toUpperCase()}</strong> records with element: <strong>{selectedElementType.toUpperCase()}</strong>)
-          </span>
-        </div>
-        <div className="flex gap-4 flex-wrap font-semibold">
-          <div>
-            Received: <strong className="text-blue-400">{repDelWeight.toFixed(2)} T</strong> ({repDelQty} elements)
+      {activeTab === "foreman" && (
+        <div className="space-y-4 text-slate-200">
+          <div className="flex justify-between items-center flex-wrap gap-4 bg-slate-950/40 p-4 border border-slate-800 rounded-2xl">
+            <div>
+              <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                Foreman & Supervisor summary directory
+              </h4>
+              <p className="text-xs text-slate-400">
+                Track precast progress metrics completed by each active supervisor across all construction sites.
+              </p>
+            </div>
           </div>
-          <div>
-            Erected: <strong className="text-purple-400">{repEreWeight.toFixed(2)} T</strong> ({repEreQty} elements)
-          </div>
+
+          {loadingSearchData ? (
+            <div className="text-center py-12 text-slate-400 font-bold flex flex-col items-center gap-2">
+              <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>Loading supervisor metrics from Firestore database...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Foremen Grid List */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="text-xs font-black uppercase text-blue-400 tracking-wider">
+                  Select Supervisor to Check Record & Print
+                </div>
+                <div className="max-h-[350px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                  {foremanSummaries.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 italic bg-slate-950/20 border border-slate-850 rounded-xl">
+                      No foreman activity records found in the database.
+                    </div>
+                  ) : (
+                    foremanSummaries.map((f, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setSelectedForemanDetail(f.name)}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                          selectedForemanDetail === f.name
+                            ? "bg-blue-500/15 border-blue-500 shadow-md"
+                            : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-xs text-white">{f.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">ID: {f.id}</div>
+                          </div>
+                          <span className="text-[9px] font-bold text-slate-400 bg-slate-850 px-2 py-0.5 rounded uppercase">
+                            {f.sites.size} site{f.sites.size !== 1 && "s"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-950/50 p-2 rounded-lg font-mono">
+                          <div>
+                            <span className="text-slate-500">Received:</span>{" "}
+                            <strong className="text-blue-400">{f.totalDelWeight.toFixed(2)} T</strong> ({f.totalDelQty} pcs)
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Erected:</span>{" "}
+                            <strong className="text-purple-400">{f.totalEreWeight.toFixed(2)} T</strong> ({f.totalEreQty} pcs)
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Foreman Detailed Panel */}
+              <div className="lg:col-span-6 bg-slate-950/20 border border-slate-850 rounded-2xl p-4.5 space-y-4">
+                {selectedForemanDetail ? (
+                  (() => {
+                    const foreman = foremanSummaries.find(f => f.name === selectedForemanDetail);
+                    if (!foreman) return null;
+                    
+                    const delList = allDeliveries.filter(d => d.unloadingDetails?.unloaderName?.trim().toUpperCase() === selectedForemanDetail.toUpperCase());
+                    const ereList = allErections.filter(e => e.erectionDetails?.erectorName?.trim().toUpperCase() === selectedForemanDetail.toUpperCase());
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-start gap-4 flex-wrap border-b border-slate-800 pb-3">
+                          <div>
+                            <h5 className="text-sm font-black text-blue-400 uppercase tracking-tight">{foreman.name}</h5>
+                            <p className="text-[10px] text-slate-500 font-mono">Supervisor ID: {foreman.id}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintPDF("foreman", foreman.name)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow"
+                          >
+                            <Printer className="h-3 w-3" />
+                            Print Foreman Record
+                          </button>
+                        </div>
+
+                        {/* Stats card */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
+                            <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Deliveries</span>
+                            <span className="text-sm font-bold text-blue-400">{foreman.totalDelWeight.toFixed(2)} T</span>
+                            <span className="block text-[8px] text-slate-400">({foreman.totalDelQty} precast elements)</span>
+                          </div>
+                          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-center">
+                            <span className="block text-slate-500 text-[9px] uppercase tracking-wider mb-0.5">Total Erections</span>
+                            <span className="text-sm font-bold text-purple-400">{foreman.totalEreWeight.toFixed(2)} T</span>
+                            <span className="block text-[8px] text-slate-400">({foreman.totalEreQty} precast elements)</span>
+                          </div>
+                        </div>
+
+                        {/* Mini Logs */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-[10px] font-extrabold uppercase text-blue-400 mb-1.5 tracking-wider">
+                              Recent Deliveries Handled ({delList.length})
+                            </div>
+                            <div className="max-h-[120px] overflow-y-auto space-y-1 bg-slate-950/40 p-2 rounded-lg border border-slate-850 scrollbar-thin">
+                              {delList.length === 0 ? (
+                                <p className="text-[10px] text-slate-500 italic">No unloading records found.</p>
+                              ) : (
+                                delList.slice(0, 8).map((d, i) => (
+                                  <div key={i} className="text-[9px] flex justify-between border-b border-slate-900 pb-1 font-mono">
+                                    <span className="text-slate-300 font-bold">{d.elementCode}</span>
+                                    <span className="text-slate-400">{d.totalWeight.toFixed(2)} T</span>
+                                    <span className="text-slate-500">{new Date(d.createdAt).toLocaleDateString()}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] font-extrabold uppercase text-purple-400 mb-1.5 tracking-wider">
+                              Recent Erections Handled ({ereList.length})
+                            </div>
+                            <div className="max-h-[120px] overflow-y-auto space-y-1 bg-slate-950/40 p-2 rounded-lg border border-slate-850 scrollbar-thin">
+                              {ereList.length === 0 ? (
+                                <p className="text-[10px] text-slate-500 italic">No erection records found.</p>
+                              ) : (
+                                ereList.slice(0, 8).map((e, i) => (
+                                  <div key={i} className="text-[9px] flex justify-between border-b border-slate-900 pb-1 font-mono">
+                                    <span className="text-slate-300 font-bold">{e.elementCode}</span>
+                                    <span className="text-slate-400">{e.totalWeight.toFixed(2)} T</span>
+                                    <span className="text-slate-500">{new Date(e.createdAt).toLocaleDateString()}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 py-16 text-slate-500 italic text-xs">
+                    <UserCheck className="h-8 w-8 text-slate-600 mb-2" />
+                    Select a foreman from the left directory list to view, review details, and trigger high-fidelity prints.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {activeTab === "search" && (
+        <div className="space-y-4 text-slate-200">
+          <div className="bg-slate-950/40 p-4 border border-slate-800 rounded-2xl">
+            <h4 className="text-sm font-black text-white uppercase tracking-wider mb-1">
+              Employee Progress Advanced Search Center
+            </h4>
+            <p className="text-xs text-slate-400">
+              Input specific employee IDs/names, site numbers, and dates to compute total progress reports and trigger prints.
+            </p>
+          </div>
+
+          {/* Form Fields row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-950/50 border border-slate-850 rounded-2xl p-4 items-end">
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
+                1. Employee No. or Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter ID or Name (e.g. EMP-101)"
+                value={searchEmpId}
+                onChange={(e) => setSearchEmpId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-550 placeholder:font-normal"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
+                2. Site No. / Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Site No (e.g. 1)"
+                value={searchSiteNo}
+                onChange={(e) => setSearchSiteNo(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-550 placeholder:font-normal"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
+                3. Select Specific Date
+              </label>
+              <input
+                type="date"
+                value={searchDate}
+                onChange={(e) => setSearchDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTriggered(true);
+                  loadAllSearchData();
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs uppercase tracking-wider inline-flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <Search className="h-3.5 w-3.5" />
+                Search Record
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchEmpId("");
+                  setSearchSiteNo("");
+                  setSearchDate("");
+                  setSearchTriggered(false);
+                }}
+                className="bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold py-2 px-3 rounded-xl text-xs uppercase tracking-wide cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {loadingSearchData ? (
+            <div className="text-center py-12 text-slate-400 font-bold flex flex-col items-center gap-2">
+              <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>Searching Firestore database records...</span>
+            </div>
+          ) : searchTriggered && searchResults ? (
+            <div className="space-y-4">
+              {/* Header metrics card */}
+              <div className="bg-slate-950/40 p-4 border border-slate-800 rounded-2xl flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <h5 className="text-xs font-black text-blue-400 uppercase tracking-widest">
+                    TOTAL PROGRESS REPORT FOR FILTERED QUERY
+                  </h5>
+                  <div className="text-[11px] text-slate-400 mt-1 space-y-0.5">
+                    <div>Employee: <strong className="text-white">{searchEmpId || "ALL"}</strong></div>
+                    <div>Site No.: <strong className="text-white">{searchSiteNo || "ALL"}</strong></div>
+                    <div>Date: <strong className="text-white">{searchDate || "ALL"}</strong></div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 items-center flex-wrap">
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-500 uppercase font-mono">Total received</div>
+                    <div className="text-sm font-bold text-blue-400">{searchResults.totalDelWeight.toFixed(2)} T <span className="text-xs text-slate-400">({searchResults.totalDelQty} pcs)</span></div>
+                  </div>
+                  <div className="h-8 w-[1px] bg-slate-800 hidden sm:block" />
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-500 uppercase font-mono">Total erected</div>
+                    <div className="text-sm font-bold text-purple-400">{searchResults.totalEreWeight.toFixed(2)} T <span className="text-xs text-slate-400">({searchResults.totalEreQty} pcs)</span></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintPDF("search")}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow"
+                  >
+                    <Printer className="h-3 w-3" />
+                    Print Summary
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid of details */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Deliveries matching search */}
+                <div className="border border-slate-850 p-4 rounded-2xl bg-slate-950/10">
+                  <h6 className="text-[11px] font-black text-blue-400 uppercase tracking-wider mb-2">
+                    Matched precast deliveries received ({searchResults.deliveries.length})
+                  </h6>
+                  <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin text-[10px] font-mono">
+                    {searchResults.deliveries.length === 0 ? (
+                      <p className="text-slate-500 italic text-center py-6">No matching unloading deliveries found.</p>
+                    ) : (
+                      searchResults.deliveries.map((d, i) => (
+                        <div key={i} className="bg-slate-950/40 p-2 border border-slate-850/60 rounded-lg flex justify-between items-center">
+                          <div>
+                            <div className="font-bold text-white text-[11px]">{d.elementCode} ({d.elementType})</div>
+                            <div className="text-slate-500 text-[9px]">MDR: {d.mdrNo} | Receiver: {d.unloadingDetails?.unloaderName}</div>
+                          </div>
+                          <div className="text-right font-bold text-blue-400">
+                            {d.totalWeight.toFixed(2)} T
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Erections matching search */}
+                <div className="border border-slate-850 p-4 rounded-2xl bg-slate-950/10">
+                  <h6 className="text-[11px] font-black text-purple-400 uppercase tracking-wider mb-2">
+                    Matched precast erections ({searchResults.erections.length})
+                  </h6>
+                  <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin text-[10px] font-mono">
+                    {searchResults.erections.length === 0 ? (
+                      <p className="text-slate-500 italic text-center py-6">No matching erection records found.</p>
+                    ) : (
+                      searchResults.erections.map((e, i) => (
+                        <div key={i} className="bg-slate-950/40 p-2 border border-slate-850/60 rounded-lg flex justify-between items-center">
+                          <div>
+                            <div className="font-bold text-white text-[11px]">{e.elementCode} ({e.elementType})</div>
+                            <div className="text-slate-500 text-[9px]">Erector: {e.erectionDetails?.erectorName}</div>
+                          </div>
+                          <div className="text-right font-bold text-purple-400">
+                            {e.totalWeight.toFixed(2)} T
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-500 italic text-xs border border-dashed border-slate-800 rounded-2xl">
+              Fill in Employee ID/Name, Site No., or Date above, and click "Search Record" to populate and print the total progress report.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hidden layout specifically customized for PRINTING */}
       <div className="hidden printing-template absolute top-0 left-0 w-full bg-white text-black p-8 font-sans">
-        {/* Print Only Styles will be in main index.css but we design the visual structure here */}
-        <div className="border-b-4 border-blue-800 pb-4 mb-6">
-          <div className="flex justify-between items-start">
-            <div>
-              {/* Beautiful Styled Company Vector Logo */}
-              <div className="flex items-center gap-3 mb-1.5">
-                <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Upward pointed pyramid/arrow in Blue */}
-                  <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
-                  {/* Inner design representing the stylish 'ARA' */}
-                  <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
-                  <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
-                </svg>
+        {printSource === "standard" && (
+          <>
+            <div className="border-b-4 border-blue-800 pb-4 mb-6">
+              <div className="flex justify-between items-start">
                 <div>
-                  <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
-                    AL RASHID ABETONG
-                  </h1>
-                  <p className="text-[10px] uppercase font-bold text-indigo-700 tracking-widest leading-none">
-                    PRECAST CONCRETE BUILDINGS CONTRACTOR
-                  </p>
+                  {/* Beautiful Styled Company Vector Logo */}
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Upward pointed pyramid/arrow in Blue */}
+                      <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
+                      {/* Inner design representing the stylish 'ARA' */}
+                      <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
+                      <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                    </svg>
+                    <div>
+                      <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
+                        AL RASHID ABETONG
+                      </h1>
+                      <p className="text-[10px] uppercase font-bold text-indigo-700 tracking-widest leading-none">
+                        PRECAST CONCRETE BUILDINGS CONTRACTOR
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500">Precast Construction Receiving & Erection Field Office</p>
+                </div>
+                <div className="text-right text-xs text-gray-600">
+                  <div className="font-bold text-sm text-blue-900 uppercase">
+                    {selectedEmployeeName !== "all" ? "Employee Progress Report" : "Field Audit Report"}
+                  </div>
+                  {selectedEmployeeName !== "all" && (
+                    <div className="font-black text-xs text-purple-900 mt-0.5">
+                      EMPLOYEE: {selectedEmployeeName.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                  <div>Project Site: No. {selectedSite?.siteNo} ({selectedSite?.name})</div>
+                  <div>Report Period: {filterPeriod.toUpperCase()}</div>
                 </div>
               </div>
-              <p className="text-[10px] text-gray-500">Precast Construction Receiving & Erection Field Office</p>
             </div>
-            <div className="text-right text-xs text-gray-600">
-              <div className="font-bold text-sm text-blue-900 uppercase">
-                {selectedEmployeeName !== "all" ? "Employee Progress Report" : "Field Audit Report"}
+
+            {/* Audit metrics */}
+            <div className="grid grid-cols-4 gap-4 mb-6 text-xs text-center">
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Received</span>
+                <span className="text-base font-black text-blue-900">{repDelWeight.toFixed(2)} Tons</span>
+                <span className="block text-[9px] text-gray-400">({repDelQty} elements total)</span>
               </div>
-              {selectedEmployeeName !== "all" && (
-                <div className="font-black text-xs text-purple-900 mt-0.5">
-                  EMPLOYEE: {selectedEmployeeName.toUpperCase()}
-                </div>
-              )}
-              <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
-              <div>Project Site: No. {selectedSite?.siteNo} ({selectedSite?.name})</div>
-              <div>Report Period: {filterPeriod.toUpperCase()}</div>
+
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Erected</span>
+                <span className="text-base font-black text-purple-900">{repEreWeight.toFixed(2)} Tons</span>
+                <span className="block text-[9px] text-gray-400">({repEreQty} elements total)</span>
+              </div>
+
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Awaiting Erection (Good Only)</span>
+                <span className="text-base font-black text-amber-700">{Math.max(0, repGoodDelWeight - repEreWeight).toFixed(2)} Tons</span>
+                <span className="block text-[9px] text-gray-400">({Math.max(0, repGoodDelQty - repEreQty)} elements)</span>
+              </div>
+
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Damages / Rejects</span>
+                <span className="text-base font-black text-red-600">
+                  {employeeFilteredData.deliveries.filter(d => d.status !== "good").length + employeeFilteredData.erections.filter(e => e.status !== "good").length}
+                </span>
+                <span className="block text-[9px] text-gray-400">reported exceptions</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Audit metrics */}
-        <div className="grid grid-cols-4 gap-4 mb-6 text-xs text-center">
-          <div className="border border-gray-200 rounded p-2.5">
-            <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Received</span>
-            <span className="text-base font-black text-blue-900">{repDelWeight.toFixed(2)} Tons</span>
-            <span className="block text-[9px] text-gray-400">({repDelQty} elements total)</span>
-          </div>
-
-          <div className="border border-gray-200 rounded p-2.5">
-            <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Erected</span>
-            <span className="text-base font-black text-purple-900">{repEreWeight.toFixed(2)} Tons</span>
-            <span className="block text-[9px] text-gray-400">({repEreQty} elements total)</span>
-          </div>
-
-          <div className="border border-gray-200 rounded p-2.5">
-            <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Awaiting Erection (Good Only)</span>
-            <span className="text-base font-black text-amber-700">{Math.max(0, repGoodDelWeight - repEreWeight).toFixed(2)} Tons</span>
-            <span className="block text-[9px] text-gray-400">({Math.max(0, repGoodDelQty - repEreQty)} elements)</span>
-          </div>
-
-          <div className="border border-gray-200 rounded p-2.5">
-            <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Damages / Rejects</span>
-            <span className="text-base font-black text-red-600">
-              {employeeFilteredData.deliveries.filter(d => d.status !== "good").length + employeeFilteredData.erections.filter(e => e.status !== "good").length}
-            </span>
-            <span className="block text-[9px] text-gray-400">reported exceptions</span>
-          </div>
-        </div>
-
-        {/* Section A: Deliveries Received */}
-        <div className="mb-6">
-          <h4 className="text-xs font-bold text-blue-900 border-b border-blue-900 pb-1 mb-2 uppercase tracking-wide">
-            1. Precast Deliveries Received Logs ({employeeFilteredData.deliveries.length} items)
-          </h4>
-          <table className="w-full text-left text-[9px] border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
-                <th className="p-1 px-2">MDR SLIP</th>
-                <th className="p-1 px-2">TRAILER NO</th>
-                <th className="p-1 px-2">ELEMENT CODE</th>
-                <th className="p-1 px-2">TYPE</th>
-                <th className="p-1 px-2 text-right">WEIGHT (T)</th>
-                <th className="p-1 px-2 text-center">QTY</th>
-                <th className="p-1 px-2 text-right">TOTAL (T)</th>
-                <th className="p-1 px-2">STATUS</th>
-                <th className="p-1 px-2">CRANE NO</th>
-                <th className="p-1 px-2">COORDINATES</th>
-                <th className="p-1 px-2">DATE</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-150">
-              {employeeFilteredData.deliveries.length > 0 ? (
-                employeeFilteredData.deliveries.map((d) => (
-                  <tr key={d.id}>
-                    <td className="p-1 px-2 font-bold">{d.mdrNo}</td>
-                    <td className="p-1 px-2 font-mono">{d.trailerNo || "-"}</td>
-                    <td className="p-1 px-2 font-mono text-blue-800">{d.elementCode}</td>
-                    <td className="p-1 px-2">{d.elementType}</td>
-                    <td className="p-1 px-2 text-right">{d.weight.toFixed(3)}</td>
-                    <td className="p-1 px-2 text-center">{d.quantity}</td>
-                    <td className="p-1 px-2 text-right font-bold">{d.totalWeight.toFixed(3)}</td>
-                    <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
-                    <td className="p-1 px-2 font-semibold">
-                      {d.unloadingDetails?.equipmentPlateNo || d.unloadingDetails?.equipmentType || "-"}
-                    </td>
-                    <td className="p-1 px-2 text-gray-500">
-                      {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
-                    </td>
-                    <td className="p-1 px-2 font-mono text-gray-400">{new Date(d.createdAt).toLocaleDateString()}</td>
+            {/* Section A: Deliveries Received */}
+            <div className="mb-6">
+              <h4 className="text-xs font-bold text-blue-900 border-b border-blue-900 pb-1 mb-2 uppercase tracking-wide">
+                1. Precast Deliveries Received Logs ({employeeFilteredData.deliveries.length} items)
+              </h4>
+              <table className="w-full text-left text-[9px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                    <th className="p-1 px-2">MDR SLIP</th>
+                    <th className="p-1 px-2">TRAILER NO</th>
+                    <th className="p-1 px-2">ELEMENT CODE</th>
+                    <th className="p-1 px-2">TYPE</th>
+                    <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                    <th className="p-1 px-2 text-center">QTY</th>
+                    <th className="p-1 px-2 text-right">TOTAL (T)</th>
+                    <th className="p-1 px-2">STATUS</th>
+                    <th className="p-1 px-2">CRANE NO</th>
+                    <th className="p-1 px-2">COORDINATES</th>
+                    <th className="p-1 px-2">DATE</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={11} className="p-2 text-center text-gray-400 italic">No delivery records matching parameters during this audit snapshot.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-gray-150">
+                  {employeeFilteredData.deliveries.length > 0 ? (
+                    employeeFilteredData.deliveries.map((d) => (
+                      <tr key={d.id}>
+                        <td className="p-1 px-2 font-bold">{d.mdrNo}</td>
+                        <td className="p-1 px-2 font-mono">{d.trailerNo || "-"}</td>
+                        <td className="p-1 px-2 font-mono text-blue-800">{d.elementCode}</td>
+                        <td className="p-1 px-2">{d.elementType}</td>
+                        <td className="p-1 px-2 text-right">{d.weight.toFixed(3)}</td>
+                        <td className="p-1 px-2 text-center">{d.quantity}</td>
+                        <td className="p-1 px-2 text-right font-bold">{d.totalWeight.toFixed(3)}</td>
+                        <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
+                        <td className="p-1 px-2 font-semibold">
+                          {d.unloadingDetails?.equipmentPlateNo || d.unloadingDetails?.equipmentType || "-"}
+                        </td>
+                        <td className="p-1 px-2 text-gray-500">
+                          {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
+                        </td>
+                        <td className="p-1 px-2 font-mono text-gray-400">{new Date(d.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={11} className="p-2 text-center text-gray-400 italic">No delivery records matching parameters during this audit snapshot.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        {/* Section B: Erections Log */}
-        <div>
-          <h4 className="text-xs font-bold text-purple-900 border-b border-purple-900 pb-1 mb-2 uppercase tracking-wide">
-            2. Precast Assembly & Erection Logs ({employeeFilteredData.erections.length} items)
-          </h4>
-          <table className="w-full text-left text-[9px] border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
-                <th className="p-1 px-2">ELEMENT CODE</th>
-                <th className="p-1 px-2">TYPE</th>
-                <th className="p-1 px-2 text-right">WEIGHT (T)</th>
-                <th className="p-1 px-2 text-center">QTY</th>
-                <th className="p-1 px-2 text-right">TOTAL (T)</th>
-                <th className="p-1 px-2">STATUS</th>
-                <th className="p-1 px-2">COORDINATES</th>
-                <th className="p-1 px-2">EQUIPMENT CRANE</th>
-                <th className="p-1 px-2">DATE</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-150">
-              {employeeFilteredData.erections.length > 0 ? (
-                employeeFilteredData.erections.map((e) => (
-                  <tr key={e.id}>
-                    <td className="p-1 px-2 font-mono text-purple-800 font-semibold">{e.elementCode}</td>
-                    <td className="p-1 px-2">{e.elementType}</td>
-                    <td className="p-1 px-2 text-right">{e.weight.toFixed(3)}</td>
-                    <td className="p-1 px-2 text-center">{e.quantity}</td>
-                    <td className="p-1 px-2 text-right font-bold">{e.totalWeight.toFixed(3)}</td>
-                    <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
-                    <td className="p-1 px-2 text-gray-500">
-                      {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
-                    </td>
-                    <td className="p-1 px-2">
-                      {e.erectionDetails?.equipmentPlateNo || e.erectionDetails?.equipmentType || "-"}
-                    </td>
-                    <td className="p-1 px-2 font-mono text-gray-400">{new Date(e.createdAt).toLocaleDateString()}</td>
+            {/* Section B: Erections Log */}
+            <div>
+              <h4 className="text-xs font-bold text-purple-900 border-b border-purple-900 pb-1 mb-2 uppercase tracking-wide">
+                2. Precast Assembly & Erection Logs ({employeeFilteredData.erections.length} items)
+              </h4>
+              <table className="w-full text-left text-[9px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                    <th className="p-1 px-2">ELEMENT CODE</th>
+                    <th className="p-1 px-2">TYPE</th>
+                    <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                    <th className="p-1 px-2 text-center">QTY</th>
+                    <th className="p-1 px-2 text-right">TOTAL (T)</th>
+                    <th className="p-1 px-2">STATUS</th>
+                    <th className="p-1 px-2">COORDINATES</th>
+                    <th className="p-1 px-2">EQUIPMENT CRANE</th>
+                    <th className="p-1 px-2">DATE</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={9} className="p-2 text-center text-gray-400 italic">No erection records matching parameters during this audit snapshot.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-gray-150">
+                  {employeeFilteredData.erections.length > 0 ? (
+                    employeeFilteredData.erections.map((e) => (
+                      <tr key={e.id}>
+                        <td className="p-1 px-2 font-mono text-purple-800 font-semibold">{e.elementCode}</td>
+                        <td className="p-1 px-2">{e.elementType}</td>
+                        <td className="p-1 px-2 text-right">{e.weight.toFixed(3)}</td>
+                        <td className="p-1 px-2 text-center">{e.quantity}</td>
+                        <td className="p-1 px-2 text-right font-bold">{e.totalWeight.toFixed(3)}</td>
+                        <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
+                        <td className="p-1 px-2 text-gray-500">
+                          {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
+                        </td>
+                        <td className="p-1 px-2">
+                          {e.erectionDetails?.equipmentPlateNo || e.erectionDetails?.equipmentType || "-"}
+                        </td>
+                        <td className="p-1 px-2 font-mono text-gray-400">{new Date(e.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={9} className="p-2 text-center text-gray-400 italic">No erection records matching parameters during this audit snapshot.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {printSource === "foreman" && printForemanName && (
+          (() => {
+            const foreman = foremanSummaries.find(f => f.name === printForemanName);
+            const delList = allDeliveries.filter(d => d.unloadingDetails?.unloaderName?.trim().toUpperCase() === printForemanName.toUpperCase());
+            const ereList = allErections.filter(e => e.erectionDetails?.erectorName?.trim().toUpperCase() === printForemanName.toUpperCase());
+            
+            return (
+              <>
+                <div className="border-b-4 border-blue-800 pb-4 mb-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
+                          <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
+                          <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                        </svg>
+                        <div>
+                          <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
+                            AL RASHID ABETONG
+                          </h1>
+                          <p className="text-[10px] uppercase font-bold text-indigo-700 tracking-widest leading-none">
+                            PRECAST CONCRETE BUILDINGS CONTRACTOR
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-gray-500">Precast Construction Receiving & Erection Field Office</p>
+                    </div>
+                    <div className="text-right text-xs text-gray-600">
+                      <div className="font-bold text-sm text-blue-900 uppercase">
+                        Supervisor performance summary
+                      </div>
+                      <div className="font-black text-xs text-blue-800 mt-0.5">
+                        FOREMAN: {printForemanName.toUpperCase()}
+                      </div>
+                      <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                      <div>Scope: All Sites & All Dates</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics */}
+                <div className="grid grid-cols-2 gap-4 mb-6 text-xs text-center">
+                  <div className="border border-gray-200 rounded p-2.5">
+                    <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Unloaded/Received</span>
+                    <span className="text-base font-black text-blue-900">{foreman ? foreman.totalDelWeight.toFixed(2) : "0.00"} Tons</span>
+                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalDelQty : 0} elements)</span>
+                  </div>
+
+                  <div className="border border-gray-200 rounded p-2.5">
+                    <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Installed/Erected</span>
+                    <span className="text-base font-black text-purple-900">{foreman ? foreman.totalEreWeight.toFixed(2) : "0.00"} Tons</span>
+                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalEreQty : 0} elements)</span>
+                  </div>
+                </div>
+
+                {/* Logs lists */}
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold text-blue-900 border-b border-blue-900 pb-1 mb-2 uppercase tracking-wide">
+                    1. Deliveries Received & Managed By {printForemanName} ({delList.length} items)
+                  </h4>
+                  <table className="w-full text-left text-[9px] border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                        <th className="p-1 px-2">MDR SLIP</th>
+                        <th className="p-1 px-2">ELEMENT CODE</th>
+                        <th className="p-1 px-2">TYPE</th>
+                        <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                        <th className="p-1 px-2">STATUS</th>
+                        <th className="p-1 px-2">COORDINATES</th>
+                        <th className="p-1 px-2">DATE</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-150">
+                      {delList.length > 0 ? (
+                        delList.map((d) => (
+                          <tr key={d.id}>
+                            <td className="p-1 px-2 font-bold">{d.mdrNo}</td>
+                            <td className="p-1 px-2 font-mono text-blue-800">{d.elementCode}</td>
+                            <td className="p-1 px-2">{d.elementType}</td>
+                            <td className="p-1 px-2 text-right">{d.totalWeight.toFixed(3)}</td>
+                            <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
+                            <td className="p-1 px-2 text-gray-500">
+                              {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
+                            </td>
+                            <td className="p-1 px-2 font-mono text-gray-400">{new Date(d.createdAt).toLocaleDateString()}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="p-2 text-center text-gray-400 italic">No unloading records found for this supervisor.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-purple-900 border-b border-purple-900 pb-1 mb-2 uppercase tracking-wide">
+                    2. Precast Erections Handled By {printForemanName} ({ereList.length} items)
+                  </h4>
+                  <table className="w-full text-left text-[9px] border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                        <th className="p-1 px-2">ELEMENT CODE</th>
+                        <th className="p-1 px-2">TYPE</th>
+                        <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                        <th className="p-1 px-2">STATUS</th>
+                        <th className="p-1 px-2">COORDINATES</th>
+                        <th className="p-1 px-2">DATE</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-150">
+                      {ereList.length > 0 ? (
+                        ereList.map((e) => (
+                          <tr key={e.id}>
+                            <td className="p-1 px-2 font-mono text-purple-800 font-semibold">{e.elementCode}</td>
+                            <td className="p-1 px-2">{e.elementType}</td>
+                            <td className="p-1 px-2 text-right">{e.totalWeight.toFixed(3)}</td>
+                            <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
+                            <td className="p-1 px-2 text-gray-500">
+                              {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
+                            </td>
+                            <td className="p-1 px-2 font-mono text-gray-400">{new Date(e.createdAt).toLocaleDateString()}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="p-2 text-center text-gray-400 italic">No erection records found for this supervisor.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()
+        )}
+
+        {printSource === "search" && searchResults && (
+          <>
+            <div className="border-b-4 border-blue-800 pb-4 mb-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <svg className="w-12 h-12" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M50 10 L90 80 H10 L50 10 Z" fill="#1e40af" />
+                      <path d="M35 55 H65 L50 30 Z" fill="#ffffff" />
+                      <path d="M25 75 H75 L50 62 Z" fill="#581c87" />
+                    </svg>
+                    <div>
+                      <h1 className="text-xl font-black text-blue-900 leading-tight tracking-wider">
+                        AL RASHID ABETONG
+                      </h1>
+                      <p className="text-[10px] uppercase font-bold text-indigo-700 tracking-widest leading-none">
+                        PRECAST CONCRETE BUILDINGS CONTRACTOR
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500">Precast Construction Receiving & Erection Field Office</p>
+                </div>
+                <div className="text-right text-xs text-gray-600">
+                  <div className="font-bold text-sm text-blue-900 uppercase">
+                    Employee Search & Progress Report
+                  </div>
+                  <div className="font-black text-xs text-purple-900 mt-0.5">
+                    CRITERIA: {searchEmpId ? `Employee: ${searchEmpId.toUpperCase()}` : "Any Employee"}
+                    {searchSiteNo && ` | Site: ${searchSiteNo.toUpperCase()}`}
+                    {searchDate && ` | Date: ${searchDate}`}
+                  </div>
+                  <div className="mt-1">Date Generated: {new Date().toLocaleDateString()}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-2 gap-4 mb-6 text-xs text-center">
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Received</span>
+                <span className="text-base font-black text-blue-900">{searchResults.totalDelWeight.toFixed(2)} Tons</span>
+                <span className="block text-[9px] text-gray-400">({searchResults.totalDelQty} elements total)</span>
+              </div>
+
+              <div className="border border-gray-200 rounded p-2.5">
+                <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Erected</span>
+                <span className="text-base font-black text-purple-900">{searchResults.totalEreWeight.toFixed(2)} Tons</span>
+                <span className="block text-[9px] text-gray-400">({searchResults.totalEreQty} elements total)</span>
+              </div>
+            </div>
+
+            {/* Logs lists */}
+            <div className="mb-6">
+              <h4 className="text-xs font-bold text-blue-900 border-b border-blue-900 pb-1 mb-2 uppercase tracking-wide">
+                1. Deliveries Received matching query criteria ({searchResults.deliveries.length} items)
+              </h4>
+              <table className="w-full text-left text-[9px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                    <th className="p-1 px-2">MDR SLIP</th>
+                    <th className="p-1 px-2">ELEMENT CODE</th>
+                    <th className="p-1 px-2">TYPE</th>
+                    <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                    <th className="p-1 px-2">STATUS</th>
+                    <th className="p-1 px-2">RECEIVER</th>
+                    <th className="p-1 px-2">COORDINATES</th>
+                    <th className="p-1 px-2">DATE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-150">
+                  {searchResults.deliveries.length > 0 ? (
+                    searchResults.deliveries.map((d) => (
+                      <tr key={d.id}>
+                        <td className="p-1 px-2 font-bold">{d.mdrNo}</td>
+                        <td className="p-1 px-2 font-mono text-blue-800">{d.elementCode}</td>
+                        <td className="p-1 px-2">{d.elementType}</td>
+                        <td className="p-1 px-2 text-right">{d.totalWeight.toFixed(3)}</td>
+                        <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
+                        <td className="p-1 px-2">{d.unloadingDetails?.unloaderName || "-"}</td>
+                        <td className="p-1 px-2 text-gray-500">
+                          {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
+                        </td>
+                        <td className="p-1 px-2 font-mono text-gray-400">{new Date(d.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="p-2 text-center text-gray-400 italic">No unloading records matching query found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-purple-900 border-b border-purple-900 pb-1 mb-2 uppercase tracking-wide">
+                2. Erections matching query criteria ({searchResults.erections.length} items)
+              </h4>
+              <table className="w-full text-left text-[9px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-500 font-bold border-b border-gray-200">
+                    <th className="p-1 px-2">ELEMENT CODE</th>
+                    <th className="p-1 px-2">TYPE</th>
+                    <th className="p-1 px-2 text-right">WEIGHT (T)</th>
+                    <th className="p-1 px-2">STATUS</th>
+                    <th className="p-1 px-2">ERECTOR</th>
+                    <th className="p-1 px-2">COORDINATES</th>
+                    <th className="p-1 px-2">DATE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-150">
+                  {searchResults.erections.length > 0 ? (
+                    searchResults.erections.map((e) => (
+                      <tr key={e.id}>
+                        <td className="p-1 px-2 font-mono text-purple-800 font-semibold">{e.elementCode}</td>
+                        <td className="p-1 px-2">{e.elementType}</td>
+                        <td className="p-1 px-2 text-right">{e.totalWeight.toFixed(3)}</td>
+                        <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
+                        <td className="p-1 px-2">{e.erectionDetails?.erectorName || "-"}</td>
+                        <td className="p-1 px-2 text-gray-500">
+                          {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
+                        </td>
+                        <td className="p-1 px-2 font-mono text-gray-400">{new Date(e.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="p-2 text-center text-gray-400 italic">No erection records matching query found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
         {/* Footer Verification Stamp */}
         <div className="mt-12 pt-4 border-t border-gray-200 flex justify-between text-[10px] text-gray-400">
