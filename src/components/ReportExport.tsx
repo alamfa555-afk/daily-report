@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent, Info, Sparkles, Search, UserCheck } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -28,6 +28,7 @@ export default function ReportExport({
   const [searchEmpId, setSearchEmpId] = useState<string>("");
   const [searchSiteNo, setSearchSiteNo] = useState<string>("");
   const [searchDate, setSearchDate] = useState<string>("");
+  const [searchElementCode, setSearchElementCode] = useState<string>("");
   const [searchTriggered, setSearchTriggered] = useState<boolean>(false);
 
   const [allSites, setAllSites] = useState<Site[]>([]);
@@ -37,6 +38,11 @@ export default function ReportExport({
 
   const [printSource, setPrintSource] = useState<"standard" | "foreman" | "search">("standard");
   const [printForemanName, setPrintForemanName] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Proactively load search data on mount
+    loadAllSearchData();
+  }, []);
 
   const loadAllSearchData = async () => {
     if (allSites.length > 0 && allDeliveries.length > 0 && allErections.length > 0) {
@@ -234,6 +240,7 @@ export default function ReportExport({
     const normEmp = searchEmpId.trim().toLowerCase();
     const normSite = searchSiteNo.trim().toLowerCase();
     const normDate = searchDate.trim(); // YYYY-MM-DD
+    const normElementCode = searchElementCode.trim().toLowerCase();
 
     // Map searchSiteNo to site ID(s)
     const matchingSites = allSites.filter(s => 
@@ -257,7 +264,11 @@ export default function ReportExport({
         matchesDate = dDateStr === normDate;
       }
 
-      return matchesEmp && matchesSite && matchesDate;
+      const matchesElement = !normElementCode || 
+        d.elementCode?.toLowerCase().includes(normElementCode) || 
+        d.elementType?.toLowerCase().includes(normElementCode);
+
+      return matchesEmp && matchesSite && matchesDate && matchesElement;
     });
 
     const filteredErections = allErections.filter((e) => {
@@ -274,7 +285,11 @@ export default function ReportExport({
         matchesDate = eDateStr === normDate;
       }
 
-      return matchesEmp && matchesSite && matchesDate;
+      const matchesElement = !normElementCode || 
+        e.elementCode?.toLowerCase().includes(normElementCode) || 
+        e.elementType?.toLowerCase().includes(normElementCode);
+
+      return matchesEmp && matchesSite && matchesDate && matchesElement;
     });
 
     const totalDelWeight = filteredDeliveries.reduce((s, x) => s + (x.totalWeight || x.weight || 0), 0);
@@ -290,7 +305,7 @@ export default function ReportExport({
       totalEreWeight,
       totalEreQty
     };
-  }, [allSites, allDeliveries, allErections, searchEmpId, searchSiteNo, searchDate, searchTriggered]);
+  }, [allSites, allDeliveries, allErections, searchEmpId, searchSiteNo, searchDate, searchElementCode, searchTriggered]);
 
   // Determine date ranges
   const filteredData = useMemo(() => {
@@ -420,6 +435,207 @@ export default function ReportExport({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // CSV download for advanced search results
+  const handleDownloadSearchCSV = () => {
+    if (!searchResults) return;
+    const { deliveries = [], erections = [] } = searchResults;
+    if (deliveries.length === 0 && erections.length === 0) {
+      setErrorNotice("No search results found to export.");
+      return;
+    }
+
+    let csvContent = "Type,MDR No / Erection,Element Code,Element Type,Weight (Ton),Quantity,Total Weight (Ton),Status,Zone,Villa Type,Building,House,Flat,Employee Name,Equipment,Date\n";
+
+    deliveries.forEach((d) => {
+      const row = [
+        "RECEIVED",
+        `"${d.mdrNo || "N/A"}"`,
+        `"${d.elementCode || ""}"`,
+        `"${d.elementType || ""}"`,
+        d.weight || 0,
+        d.quantity || 1,
+        d.totalWeight || 0,
+        `"${d.status || ""}"`,
+        `"${d.zone || ""}"`,
+        `"${d.villaType || ""}"`,
+        `"${d.buildingNo || ""}"`,
+        `"${d.houseNo || ""}"`,
+        `"${d.flatNo || ""}"`,
+        `"${d.unloadingDetails?.unloaderName || ""}"`,
+        `"${d.unloadingDetails?.equipmentType || ""}"`,
+        `"${new Date(d.createdAt).toLocaleDateString()}"`
+      ];
+      csvContent += row.join(",") + "\n";
+    });
+
+    erections.forEach((e) => {
+      const row = [
+        "ERECTED",
+        `"Erection Progress"`,
+        `"${e.elementCode || ""}"`,
+        `"${e.elementType || ""}"`,
+        e.weight || 0,
+        e.quantity || 1,
+        e.totalWeight || 0,
+        `"${e.status || ""}"`,
+        `"${e.zone || ""}"`,
+        `"${e.villaType || ""}"`,
+        `"${e.buildingNo || ""}"`,
+        `"${e.houseNo || ""}"`,
+        `"${e.flatNo || ""}"`,
+        `"${e.erectionDetails?.erectorName || ""}"`,
+        `"${e.erectionDetails?.equipmentType || ""}"`,
+        `"${new Date(e.createdAt).toLocaleDateString()}"`
+      ];
+      csvContent += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `ARA_Search_Report_${searchEmpId || "All"}_Site_${searchSiteNo || "All"}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // PDF download for advanced search results
+  const handleDownloadSearchPDF = () => {
+    if (!searchResults) return;
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const primaryColor = [30, 41, 59]; // Slate 800
+      const blueColor = [37, 99, 235]; // Blue 600
+      const purpleColor = [126, 34, 206]; // Purple 700
+      const textDark = [15, 23, 42]; // Slate 900
+
+      // Header band
+      doc.setFillColor(241, 245, 249);
+      doc.rect(0, 0, 210, 32, "F");
+
+      // Left border accent
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, 0, 4, 32, "F");
+
+      // Header details
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("ARA SEARCH & PERFORMANCE REPORT", 12, 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 18);
+      doc.text(`Search Criteria: Emp: ${searchEmpId || "ALL"} | Site: ${searchSiteNo || "ALL"} | Date: ${searchDate || "ALL"} | Element: ${searchElementCode || "ALL"}`, 12, 23);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 130, 12);
+
+      // Section 1: Summary Stats
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("QUERY METRICS SUMMARY", 12, 38);
+
+      // Draw two boxes
+      doc.setFillColor(248, 250, 252);
+      doc.rect(12, 42, 90, 20, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(12, 42, 90, 20, "S");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("TOTAL DELIVERIES RECEIVED", 16, 47);
+      doc.setFontSize(11);
+      doc.setTextColor(37, 99, 235);
+      doc.text(`${searchResults.totalDelQty} PCS (${searchResults.totalDelWeight.toFixed(2)} Tons)`, 16, 54);
+
+      doc.setFillColor(248, 250, 252);
+      doc.rect(108, 42, 90, 20, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(108, 42, 90, 20, "S");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("TOTAL ASSEMBLY ERECTED", 112, 47);
+      doc.setFontSize(11);
+      doc.setTextColor(126, 34, 206);
+      doc.text(`${searchResults.totalEreQty} PCS (${searchResults.totalEreWeight.toFixed(2)} Tons)`, 112, 54);
+
+      // Section 2: Deliveries Table
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("1. MATCHED DELIVERIES RECEIVED", 12, 70);
+
+      const delData = searchResults.deliveries.map(d => [
+        d.createdAt ? d.createdAt.split("T")[0] : "N/A",
+        d.mdrNo || "N/A",
+        d.elementCode || "",
+        d.elementType || "",
+        d.quantity || 1,
+        (d.totalWeight || 0).toFixed(2),
+        d.unloadingDetails?.unloaderName || ""
+      ]);
+
+      autoTable(doc, {
+        startY: 73,
+        head: [["Date", "MDR No", "Element Code", "Type", "Qty", "Weight (T)", "Receiver/Unloader"]],
+        body: delData.length > 0 ? delData : [["-", "-", "No deliveries match criteria", "-", "-", "-", "-"]],
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [30, 41, 59] }
+      });
+
+      // Section 3: Erections Table
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("2. MATCHED ASSEMBLY ERECTIONS", 12, finalY);
+
+      const ereData = searchResults.erections.map(e => [
+        e.createdAt ? e.createdAt.split("T")[0] : "N/A",
+        e.elementCode || "",
+        e.elementType || "",
+        e.quantity || 1,
+        (e.totalWeight || 0).toFixed(2),
+        e.erectionDetails?.erectorName || ""
+      ]);
+
+      autoTable(doc, {
+        startY: finalY + 3,
+        head: [["Date", "Element Code", "Type", "Qty", "Weight (T)", "Erector/Supervisor"]],
+        body: ereData.length > 0 ? ereData : [["-", "No erections match criteria", "-", "-", "-", "-"]],
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [126, 34, 206] }
+      });
+
+      // Footer
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${i} of ${pageCount} - ARA Search Results Report`, 12, 287);
+        doc.text("CONFIDENTIAL - AL RASHID ABETONG PRECAST OPERATIONS", 110, 287);
+      }
+
+      doc.save(`ARA_Search_Report_${searchEmpId || "All"}_Site_${searchSiteNo || "All"}.pdf`);
+    } catch (err) {
+      console.error("PDF generation for search results failed:", err);
+      setErrorNotice("Search PDF download failed. Please try again.");
+    }
   };
 
   // Modern Document PDF Print
@@ -976,7 +1192,7 @@ export default function ReportExport({
           </div>
 
           {/* Form Fields row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-950/50 border border-slate-850 rounded-2xl p-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-950/50 border border-slate-850 rounded-2xl p-4 items-end animate-fade-in">
             <div>
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
                 1. Employee No. or Name
@@ -1021,7 +1237,23 @@ export default function ReportExport({
 
             <div>
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
-                3. Select Specific Date
+                3. Element Code / Type
+              </label>
+              <input
+                type="text"
+                value={searchElementCode}
+                onChange={(e) => {
+                  setSearchElementCode(e.target.value);
+                  setSearchTriggered(true);
+                }}
+                placeholder="e.g. PC-201, Slab"
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2.5 text-xs text-white font-bold placeholder:text-slate-650 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 tracking-wider">
+                4. Select Specific Date
               </label>
               <select
                 value={searchDate}
@@ -1029,7 +1261,7 @@ export default function ReportExport({
                   setSearchDate(e.target.value);
                   setSearchTriggered(true);
                 }}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 [&_option]:bg-slate-950 cursor-pointer"
               >
                 <option value="">ALL DATES ({searchDates.length})</option>
                 {searchDates.map((dateStr, i) => (
@@ -1058,6 +1290,7 @@ export default function ReportExport({
                   setSearchEmpId("");
                   setSearchSiteNo("");
                   setSearchDate("");
+                  setSearchElementCode("");
                   setSearchTriggered(false);
                 }}
                 className="bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold py-2 px-3 rounded-xl text-xs uppercase tracking-wide cursor-pointer"
@@ -1076,7 +1309,7 @@ export default function ReportExport({
               <span>Searching Firestore database records...</span>
             </div>
           ) : searchTriggered && searchResults ? (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-fade-in">
               {/* Header metrics card */}
               <div className="bg-slate-950/40 p-4 border border-slate-800 rounded-2xl flex flex-wrap justify-between items-center gap-4">
                 <div>
@@ -1086,6 +1319,7 @@ export default function ReportExport({
                   <div className="text-[11px] text-slate-400 mt-1 space-y-0.5">
                     <div>Employee: <strong className="text-white">{searchEmpId || "ALL"}</strong></div>
                     <div>Site No.: <strong className="text-white">{searchSiteNo || "ALL"}</strong></div>
+                    {searchElementCode && <div>Element Filter: <strong className="text-white">{searchElementCode}</strong></div>}
                     <div>Date: <strong className="text-white">{searchDate || "ALL"}</strong></div>
                   </div>
                 </div>
@@ -1100,14 +1334,32 @@ export default function ReportExport({
                     <div className="text-[10px] text-slate-500 uppercase font-mono">Total erected</div>
                     <div className="text-sm font-bold text-purple-400">{searchResults.totalEreQty} pcs <span className="text-xs text-slate-400">({searchResults.totalEreWeight.toFixed(2)} T)</span></div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePrintPDF("search")}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow"
-                  >
-                    <Printer className="h-3 w-3" />
-                    Print Summary
-                  </button>
+                  <div className="flex gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleDownloadSearchCSV}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center gap-1 shadow cursor-pointer"
+                    >
+                      <FileSpreadsheet className="h-3 w-3" />
+                      Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSearchPDF}
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center gap-1 shadow cursor-pointer"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Download PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintPDF("search")}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider inline-flex items-center gap-1 shadow cursor-pointer"
+                    >
+                      <Printer className="h-3 w-3" />
+                      Print
+                    </button>
+                  </div>
                 </div>
               </div>
 

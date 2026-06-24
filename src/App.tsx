@@ -21,6 +21,7 @@ import ErectionForm from "./components/ErectionForm";
 import StatsGrid from "./components/StatsGrid";
 import ReportExport from "./components/ReportExport";
 import DataTable from "./components/DataTable";
+import SiteInventory from "./components/SiteInventory";
 
 export default function App() {
   // State managers
@@ -33,6 +34,7 @@ export default function App() {
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("");
   
   const [activeFormTab, setActiveFormTab] = useState<"receive" | "erect">("receive");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory">("logging");
 
   // Dynamic filter for dashboard
   const filteredDeliveriesForDashboard = useMemo(() => {
@@ -394,126 +396,184 @@ export default function App() {
             erections={filteredErectionsForDashboard}
           />
 
-          {/* Form Entries & Layouts */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            {/* Left/Middle Column - Entry Workflows forms (Tabs) */}
-            <div className="lg:col-span-8 bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-xl shadow-xl p-4">
-              
-              {/* Form Tab Switches */}
-              <div className="flex gap-1.5 p-0.5 bg-slate-950/70 border border-slate-800/70 rounded-lg mb-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveFormTab("receive")}
-                  className={`cursor-pointer flex-1 py-1 px-2.5 rounded text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
-                    activeFormTab === "receive"
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/10"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <Inbox className="h-3 w-3" />
-                  MDR Slip (Received)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveFormTab("erect")}
-                  className={`cursor-pointer flex-1 py-1 px-2.5 rounded text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
-                    activeFormTab === "erect"
-                      ? "bg-purple-700 text-white shadow-lg shadow-purple-500/10"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <Construction className="h-3 w-3" />
-                  Erection Progress
-                </button>
-              </div>
-
-              {/* Active Tab Screen */}
-              {activeFormTab === "receive" ? (
-                <div className="animate-fade-in">
-                  <DeliveryForm
-                    selectedSite={selectedSite}
-                    sites={sites}
-                    onSelectSite={setSelectedSite}
-                    suggestions={mergedSuggestionsMap}
-                    lastDelivery={lastDelivery}
-                    onSuccess={() => console.log("Received data logged successfully.")}
-                  />
-                </div>
-              ) : (
-                <div className="animate-fade-in">
-                  <ErectionForm
-                    selectedSite={selectedSite}
-                    sites={sites}
-                    onSelectSite={setSelectedSite}
-                    suggestions={mergedSuggestionsMap}
-                    lastErection={lastErection}
-                    deliveries={deliveries}
-                    onSuccess={() => console.log("Erection logged successfully")}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Right Column - Small Help Card & Quick Site Info */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-gradient-to-bx from-blue-950/60 to-purple-950/60 border border-slate-800/80 text-white rounded-2xl shadow-2xl p-6 relative overflow-hidden backdrop-blur-md">
-                {/* Background SVG style accent */}
-                <div className="absolute -right-16 -bottom-16 opacity-10">
-                  <Building2 className="w-48 h-48" />
-                </div>
-                
-                <h3 className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-blue-400" />
-                  Active Site Brief
-                </h3>
-                <h2 className="text-lg font-black tracking-tight mb-1">
-                  Site. No {selectedSite.siteNo}
-                </h2>
-                <p className="text-xs text-blue-200/90 mb-4 font-semibold">{selectedSite.name}</p>
-                <div className="h-px bg-blue-800/60 my-4"></div>
-                <div className="space-y-3.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-blue-200/75">Registration Date:</span>
-                    <span className="font-mono font-medium">{new Date(selectedSite.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-200/75">Deliveries Logged:</span>
-                    <span className="font-bold text-emerald-400">{deliveries.length} items</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-blue-200/75">Erections Logged:</span>
-                    <span className="font-bold text-purple-300">{erections.length} items</span>
-                  </div>
-                </div>
-              </div>
-
-               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-inner text-xs space-y-3">
-                 <h4 className="font-bold text-slate-200 uppercase tracking-wide flex items-center gap-1.5 pb-2 border-b border-slate-800/80">
-                    <Sparkles className="h-4 w-4 text-yellow-500" />
-                    How suggestions save time
-                 </h4>
-                 <p className="text-slate-300 leading-relaxed">
-                   Typing operator IDs, crane levels, plate numbers, or custom house references once adds them immediately. 
-                   Next time, simply start typing or click the arrow to select instantly. Pre-filled rows also import previous values dynamically!
-                 </p>
-               </div>
-            </div>
+          {/* Clean, High-Contrast Dashboard Navigation Tabs */}
+          <div className="flex flex-wrap p-1 bg-slate-950/70 border border-slate-800 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("logging")}
+              className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeDashboardTab === "logging"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/10"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
+            >
+              📝 LOGGING FORMS
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("logs")}
+              className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeDashboardTab === "logs"
+                  ? "bg-purple-700 text-white shadow-lg shadow-purple-500/10"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
+            >
+              📋 DATA LOG SHEETS ({deliveries.length + erections.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("reports")}
+              className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeDashboardTab === "reports"
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/10"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
+            >
+              📊 REPORTS & SEARCH
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("inventory")}
+              className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeDashboardTab === "inventory"
+                  ? "bg-amber-600 text-white shadow-lg shadow-amber-500/10"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
+            >
+              📦 SITE INVENTORY
+            </button>
           </div>
 
-          {/* Interactive Logs & Filtering Data-Tables */}
-          <DataTable
-            deliveries={filteredDeliveriesForDashboard}
-            erections={filteredErectionsForDashboard}
-            selectedSiteNo={selectedSite.siteNo}
-          />
+          {/* Conditional Rendering based on active dashboard tab */}
+          {activeDashboardTab === "logging" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start animate-fade-in">
+              {/* Left Column - Entry forms */}
+              <div className="lg:col-span-8 bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-xl shadow-xl p-4">
+                
+                {/* Form Tab Switches */}
+                <div className="flex gap-1.5 p-0.5 bg-slate-950/70 border border-slate-800/70 rounded-lg mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFormTab("receive")}
+                    className={`cursor-pointer flex-1 py-1.5 px-2.5 rounded text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                      activeFormTab === "receive"
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Inbox className="h-3.5 w-3.5" />
+                    MDR Slip (Received)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFormTab("erect")}
+                    className={`cursor-pointer flex-1 py-1.5 px-2.5 rounded text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                      activeFormTab === "erect"
+                        ? "bg-purple-700 text-white shadow-md"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Construction className="h-3.5 w-3.5" />
+                    Erection Progress
+                  </button>
+                </div>
 
-          {/* Reports generator, PDF Letterhead exports, CSV downloaders */}
-          <ReportExport
-            selectedSite={selectedSite}
-            deliveries={filteredDeliveriesForDashboard}
-            erections={filteredErectionsForDashboard}
-          />
+                {/* Active Tab Screen */}
+                {activeFormTab === "receive" ? (
+                  <div className="animate-fade-in">
+                    <DeliveryForm
+                      selectedSite={selectedSite}
+                      sites={sites}
+                      onSelectSite={setSelectedSite}
+                      suggestions={mergedSuggestionsMap}
+                      lastDelivery={lastDelivery}
+                      onSuccess={() => console.log("Received data logged successfully.")}
+                    />
+                  </div>
+                ) : (
+                  <div className="animate-fade-in">
+                    <ErectionForm
+                      selectedSite={selectedSite}
+                      sites={sites}
+                      onSelectSite={setSelectedSite}
+                      suggestions={mergedSuggestionsMap}
+                      lastErection={lastErection}
+                      deliveries={deliveries}
+                      onSuccess={() => console.log("Erection logged successfully")}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Small Help Card & Quick Site Info */}
+              <div className="lg:col-span-4 space-y-4">
+                <div className="bg-gradient-to-bx from-blue-950/40 to-slate-900/60 border border-slate-800/80 text-white rounded-xl shadow-2xl p-4 relative overflow-hidden backdrop-blur-md">
+                  <h3 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2 text-blue-400">
+                    <Layers className="h-3.5 w-3.5" />
+                    Active Site Status
+                  </h3>
+                  <h2 className="text-base font-black tracking-tight mb-0.5 text-white">
+                    Site No. {selectedSite.siteNo}
+                  </h2>
+                  <p className="text-xs text-slate-300 font-semibold mb-3">{selectedSite.name}</p>
+                  <div className="h-px bg-slate-800 my-2"></div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Date Registered:</span>
+                      <span className="font-mono text-white">{new Date(selectedSite.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Total MDR Deliveries:</span>
+                      <span className="font-bold text-emerald-400">{deliveries.length} pcs</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Total Erections:</span>
+                      <span className="font-bold text-purple-300">{erections.length} pcs</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-xs space-y-2">
+                  <h4 className="font-bold text-white uppercase tracking-wide flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
+                     <Sparkles className="h-3.5 w-3.5 text-yellow-500" />
+                     Live Suggestions Active
+                  </h4>
+                  <p className="text-slate-200 leading-relaxed text-[11px]">
+                    MDRs, Operator IDs, Plate numbers and Villa types auto-save on submission for instant future selection!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeDashboardTab === "logs" && (
+            <div className="animate-fade-in">
+              <DataTable
+                deliveries={filteredDeliveriesForDashboard}
+                erections={filteredErectionsForDashboard}
+                selectedSiteNo={selectedSite.siteNo}
+              />
+            </div>
+          )}
+
+          {activeDashboardTab === "reports" && (
+            <div className="animate-fade-in">
+              <ReportExport
+                selectedSite={selectedSite}
+                deliveries={filteredDeliveriesForDashboard}
+                erections={filteredErectionsForDashboard}
+              />
+            </div>
+          )}
+
+          {activeDashboardTab === "inventory" && (
+            <div className="animate-fade-in">
+              <SiteInventory
+                sites={sites}
+                initialSelectedSite={selectedSite}
+              />
+            </div>
+          )}
 
         </main>
       ) : (
