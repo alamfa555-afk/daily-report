@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, Loader2, Save, Sparkles, Send, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { Site, Delivery, ElementStatus } from "../types";
-import { db, collection, doc, setDoc, handleFirestoreError, OperationType } from "../lib/firebase";
+import { db, collection, doc, setDoc, handleFirestoreError, OperationType, query, where, getDocs, addDoc } from "../lib/firebase";
 import { saveSuggestion } from "../lib/suggestions";
 import CustomCombobox from "./CustomCombobox";
 
@@ -269,6 +269,30 @@ export default function DeliveryForm({
         // Save autocompleting suggestions
         await saveSuggestion("elementCode", item.elementCode);
         await saveSuggestion("elementType", item.elementType);
+      }
+
+      // Automatically register the crane/equipment in the general directory if not already present
+      if (equipmentPlateNo.trim() && selectedSite) {
+        const plate = equipmentPlateNo.trim().toUpperCase();
+        try {
+          const eqQuery = query(collection(db, "equipment"), where("plateNo", "==", plate));
+          const eqSnap = await getDocs(eqQuery);
+          if (eqSnap.empty) {
+            await addDoc(collection(db, "equipment"), {
+              siteId: selectedSite.id,
+              siteNo: selectedSite.siteNo,
+              equipmentType: equipmentType.trim() || "Mobile Crane",
+              plateNo: plate,
+              capacity: Number(capacity) || 25,
+              status: "ARA",
+              ownerName: "",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        } catch (eqErr) {
+          console.error("Error auto-registering crane during delivery submission:", eqErr);
+        }
       }
 
       // Save metadata autocompleting suggestions

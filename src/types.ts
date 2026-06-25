@@ -90,6 +90,7 @@ export interface Equipment {
   plateNo: string;
   capacity: number; // capacity (ton)
   status: 'rented' | 'ARA';
+  ownerName?: string;
   createdAt: string;
   updatedAt: string;
 }

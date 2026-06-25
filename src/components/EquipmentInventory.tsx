@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db, collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "../lib/firebase";
+import { db, collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs } from "../lib/firebase";
 import { Site, Equipment } from "../types";
 import { 
   Loader2, 
@@ -15,7 +15,8 @@ import {
   X, 
   SlidersHorizontal,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw
 } from "lucide-react";
 
 interface EquipmentInventoryProps {
@@ -35,6 +36,7 @@ const EQUIPMENT_TYPES = [
 export default function EquipmentInventory({ sites, currentSite }: EquipmentInventoryProps) {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -51,6 +53,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
   const [formPlateNo, setFormPlateNo] = useState<string>("");
   const [formCapacity, setFormCapacity] = useState<string>("");
   const [formStatus, setFormStatus] = useState<"rented" | "ARA">("ARA");
+  const [formOwnerName, setFormOwnerName] = useState<string>("");
 
   // Sync search state with the current selected site from App
   useEffect(() => {
@@ -87,6 +90,123 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     return () => unsubscribe();
   }, []);
 
+  // Scan previous site logs (Deliveries & Erections) and automatically sync new cranes/equipment records
+  const handleAutoSyncCranes = async (silent: boolean = false) => {
+    if (!silent) setSyncing(true);
+    try {
+      // Get all existing registered plate numbers
+      const registeredPlates = new Set<string>();
+      const q = query(collection(db, "equipment"));
+      const snapshot = await getDocs(q);
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.plateNo) {
+          registeredPlates.add(data.plateNo.trim().toUpperCase());
+        }
+      });
+
+      // Get deliveries and erections logs
+      const delSnap = await getDocs(collection(db, "deliveries"));
+      const ereSnap = await getDocs(collection(db, "erections"));
+
+      const newEquipmentFound: Omit<Equipment, "id">[] = [];
+
+      // Read from deliveries
+      delSnap.forEach((doc) => {
+        const data = doc.data();
+        const unloading = data.unloadingDetails;
+        if (unloading && unloading.equipmentPlateNo && unloading.equipmentPlateNo.trim()) {
+          const plate = unloading.equipmentPlateNo.trim().toUpperCase();
+          if (!registeredPlates.has(plate)) {
+            registeredPlates.add(plate);
+            
+            // Map default equipment type matching or default to Mobile Crane
+            let rawType = unloading.equipmentType || "Mobile Crane";
+            let eqType = "Mobile Crane";
+            if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
+            else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
+            else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
+            else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
+            else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
+            else if (rawType.trim()) eqType = rawType.trim();
+
+            newEquipmentFound.push({
+              siteId: data.siteId || "",
+              siteNo: data.siteNo || "N/A",
+              equipmentType: eqType,
+              plateNo: plate,
+              capacity: Number(unloading.capacity) || 25,
+              status: "ARA", // Default, user can change status and owner later
+              ownerName: "",
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      });
+
+      // Read from erections
+      ereSnap.forEach((doc) => {
+        const data = doc.data();
+        const erection = data.erectionDetails;
+        if (erection && erection.equipmentPlateNo && erection.equipmentPlateNo.trim()) {
+          const plate = erection.equipmentPlateNo.trim().toUpperCase();
+          if (!registeredPlates.has(plate)) {
+            registeredPlates.add(plate);
+            
+            let rawType = erection.equipmentType || "Mobile Crane";
+            let eqType = "Mobile Crane";
+            if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
+            else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
+            else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
+            else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
+            else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
+            else if (rawType.trim()) eqType = rawType.trim();
+
+            newEquipmentFound.push({
+              siteId: data.siteId || "",
+              siteNo: data.siteNo || "N/A",
+              equipmentType: eqType,
+              plateNo: plate,
+              capacity: Number(erection.capacity) || 25,
+              status: "ARA",
+              ownerName: "",
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      });
+
+      if (newEquipmentFound.length > 0) {
+        // Log all of them
+        for (const item of newEquipmentFound) {
+          await addDoc(collection(db, "equipment"), item);
+        }
+        if (!silent) {
+          setSuccessMsg(`⚡ Successfully fetched and synchronized ${newEquipmentFound.length} new crane/equipment records from site logs!`);
+        }
+      } else {
+        if (!silent) {
+          setSuccessMsg("⚡ Site logs are fully synchronized. No new crane records found.");
+        }
+      }
+    } catch (err) {
+      console.error("Auto sync failed:", err);
+      if (!silent) {
+        setErrorMsg("Failed to synchronize crane records from logs.");
+      }
+    } finally {
+      if (!silent) setSyncing(false);
+    }
+  };
+
+  // Perform a silent sync on component mount to fetch any unsynced cranes automatically
+  useEffect(() => {
+    // Silent sync on first load
+    handleAutoSyncCranes(true);
+  }, []);
+
   // Filtered equipment by Site Number (case insensitive search)
   const filteredEquipment = useMemo(() => {
     if (!searchSiteNo.trim()) return equipmentList;
@@ -112,6 +232,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     setFormPlateNo("");
     setFormCapacity("");
     setFormStatus("ARA");
+    setFormOwnerName("");
     setEditingId(null);
   };
 
@@ -137,6 +258,10 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       setErrorMsg("Please enter a valid capacity in Tons.");
       return;
     }
+    if (formStatus === "rented" && !formOwnerName.trim()) {
+      setErrorMsg("Please enter the Rental Owner/Company Name.");
+      return;
+    }
 
     const selectedSiteObj = sites.find((s) => s.id === formSiteId);
     if (!selectedSiteObj) {
@@ -151,6 +276,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       plateNo: formPlateNo.trim().toUpperCase(),
       capacity: Number(formCapacity),
       status: formStatus,
+      ownerName: formStatus === "rented" ? formOwnerName.trim() : "",
       updatedAt: new Date().toISOString()
     };
 
@@ -184,6 +310,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     setFormPlateNo(item.plateNo);
     setFormCapacity(String(item.capacity));
     setFormStatus(item.status);
+    setFormOwnerName(item.ownerName || "");
     setShowAddForm(true);
     // Scroll to form nicely
     window.scrollTo({ top: 350, behavior: "smooth" });
@@ -278,6 +405,16 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Main Action buttons */}
+          <button
+            onClick={() => handleAutoSyncCranes(false)}
+            disabled={syncing}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none hover:scale-[1.01]"
+            title="Automatically scan all deliveries & erections reports to fetch and list logged cranes"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Scanning..." : "Sync from Site Logs"}
+          </button>
+
           <button
             onClick={() => {
               if (showAddForm && editingId) {
@@ -397,7 +534,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
             </div>
 
             {/* Ownership Status Rented / ARA Dropdown */}
-            <div className="md:col-span-2 flex flex-col gap-1">
+            <div className={`${formStatus === "rented" ? "md:col-span-1" : "md:col-span-2"} flex flex-col gap-1`}>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Status (Ownership) *
               </label>
@@ -410,6 +547,23 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
                 <option value="rented">Rented</option>
               </select>
             </div>
+
+            {/* Dynamic Owner Name Field */}
+            {formStatus === "rented" && (
+              <div className="md:col-span-1 flex flex-col gap-1 animate-fade-in">
+                <label className="text-[10px] font-black text-amber-450 uppercase tracking-wider">
+                  Owner / Rental Co. *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Al-Faris"
+                  value={formOwnerName}
+                  onChange={(e) => setFormOwnerName(e.target.value)}
+                  className="bg-slate-900/90 border border-amber-500/25 rounded-xl px-3 py-2.5 text-xs text-white font-bold placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
+                />
+              </div>
+            )}
 
             {/* Submission triggers */}
             <div className="col-span-1 md:col-span-12 flex justify-end gap-2 mt-2 pt-2 border-t border-slate-850">
@@ -550,9 +704,16 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
                               ARA (Al Rashid)
                             </span>
                           ) : (
-                            <span className="bg-amber-500/10 text-amber-300 border border-amber-500/25 rounded px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider inline-block">
-                              Rented
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="bg-amber-500/10 text-amber-300 border border-amber-500/25 rounded px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider inline-block">
+                                Rented
+                              </span>
+                              {eq.ownerName && (
+                                <span className="text-[10px] text-slate-400 font-sans font-bold bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800" title="Rental Company Name">
+                                  👤 {eq.ownerName}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="p-3 text-right">
