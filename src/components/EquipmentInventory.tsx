@@ -22,6 +22,126 @@ import {
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const drawARALogo = (doc: any, x: number, y: number, width: number, height: number) => {
+  const drawAbsolutePolygon = (points: {x: number, y: number}[], style: string) => {
+    if (points.length === 0) return;
+    try {
+      if (typeof doc.polygon === "function") {
+        const relativePoints = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+          relativePoints.push({
+            x: points[i].x - points[i - 1].x,
+            y: points[i].y - points[i - 1].y
+          });
+        }
+        doc.polygon(relativePoints, style);
+      } else {
+        // Fallback: draw using lines
+        doc.setLineWidth(0.5);
+        for (let i = 0; i < points.length; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % points.length];
+          doc.line(p1.x, p1.y, p2.x, p2.y);
+        }
+      }
+    } catch (e) {
+      console.error("drawAbsolutePolygon failed:", e);
+    }
+  };
+
+  // Blue Background Arrow/Triangle (3 points)
+  const pts1 = [
+    { x: x + width * (60 / 120), y: y + height * (6 / 100) },
+    { x: x + width * (102 / 120), y: y + height * (82 / 100) },
+    { x: x + width * (18 / 120), y: y + height * (82 / 100) }
+  ];
+  doc.setFillColor(27, 117, 188); // #1b75bc
+  try {
+    doc.triangle(pts1[0].x, pts1[0].y, pts1[1].x, pts1[1].y, pts1[2].x, pts1[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(pts1, "F");
+  }
+
+  // Left A (6 points)
+  const ptsLeftA = [
+    { x: x + width * (5 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (42 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (54 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (24 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (52 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsLeftA, "F");
+
+  // Left A cutout (3 points)
+  const ptsLeftCutout = [
+    { x: x + width * (34 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (26 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (30 / 120), y: y + height * (52 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  try {
+    doc.triangle(ptsLeftCutout[0].x, ptsLeftCutout[0].y, ptsLeftCutout[1].x, ptsLeftCutout[1].y, ptsLeftCutout[2].x, ptsLeftCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsLeftCutout, "F");
+  }
+
+  // Middle R (13 points)
+  const ptsR = [
+    { x: x + width * (38 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (39 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (41.5 / 100) },
+    { x: x + width * (80 / 120), y: y + height * (46 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (50.5 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (53 / 100) },
+    { x: x + width * (57 / 120), y: y + height * (54 / 100) },
+    { x: x + width * (72 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (60 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (58 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (38 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsR, "F");
+
+  // Middle R Cutout (4 points)
+  const ptsRCutout = [
+    { x: x + width * (48 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (48 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (48 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  drawAbsolutePolygon(ptsRCutout, "F");
+
+  // Right A (6 points)
+  const ptsRightA = [
+    { x: x + width * (66 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (94 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (115 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsRightA, "F");
+
+  // Right A cutout (3 points)
+  const ptsRightCutout = [
+    { x: x + width * (82 / 120), y: y + height * (52 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (86 / 120), y: y + height * (63 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  try {
+    doc.triangle(ptsRightCutout[0].x, ptsRightCutout[0].y, ptsRightCutout[1].x, ptsRightCutout[1].y, ptsRightCutout[2].x, ptsRightCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsRightCutout, "F");
+  }
+};
+
 interface EquipmentInventoryProps {
   sites: Site[];
   currentSite: Site | null;
@@ -405,37 +525,61 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
 
     const textDark = [15, 23, 42];
 
-    // Header Band
-    doc.setFillColor(241, 245, 249);
-    doc.rect(0, 0, 210, 32, "F");
-    doc.setFillColor(217, 119, 6); // Amber-600 color for heavy equipment / cranes
-    doc.rect(0, 0, 4, 32, "F");
+    // 1. Draw Centered ARA Logo
+    const logoWidth = 18;
+    const logoHeight = 14;
+    const logoX = (210 - logoWidth) / 2; // ~96mm
+    const logoY = 8;
+    drawARALogo(doc, logoX, logoY, logoWidth, logoHeight);
 
-    // Header Text
+    // 2. Company Name Center (AL RASHID ABETONG)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    doc.text("ARA CRANE & EQUIPMENT DEPLOYMENT REPORT", 12, 12);
+    doc.setFontSize(15);
+    doc.setTextColor(27, 38, 59); // deep corporate blue/slate
+    doc.text("AL RASHID ABETONG", 105, 27, { align: "center" });
 
-    doc.setFont("helvetica", "normal");
+    // 3. Subtitle Center (THE PRECAST COMPANY)
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
+    doc.setTextColor(115, 115, 115); // neutral gray
+    doc.text("THE PRECAST COMPANY", 105, 31, { align: "center" });
+
+    // 4. Report Title Center
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.text("CRANE & EQUIPMENT DEPLOYMENT REPORT", 105, 37, { align: "center" });
+
+    // 5. Divider Line
+    doc.setDrawColor(203, 213, 225); // Slate 300
+    doc.setLineWidth(0.4);
+    doc.line(12, 40, 198, 40);
+
+    // 6. Draw details on both sides
+    // Left side details (Aligned Left starting at X = 12)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
     doc.setTextColor(100, 116, 139);
-    doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 17);
-
-    // Active Site Pill (if filtered)
-    doc.setFillColor(254, 243, 199); // light amber
-    doc.setDrawColor(251, 191, 36); // border amber
-    doc.roundedRect(12, 21, 125, 7, 1, 1, "FD"); // rounded rect
-    
+    doc.text("ACTIVE SITE:", 12, 45);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(146, 64, 14); // deep amber
-    doc.text(`Active Site Reference: Site No. ${searchSiteNo ? searchSiteNo : "ALL ACTIVE SITES"}`, 15, 25.5);
+    doc.setTextColor(30, 41, 59);
+    const siteText = searchSiteNo ? `Site No. ${searchSiteNo}` : "ALL ACTIVE SITES";
+    doc.text(siteText, 32, 45);
+
+    // Right side details (Aligned Left starting at X = 135)
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100, 116, 139);
+    doc.text("GENERATED DATE:", 135, 45);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text(new Date().toLocaleDateString(), 165, 45);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(217, 119, 6);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 155, 12);
+    doc.setTextColor(100, 116, 139);
+    doc.text("OPERATIONS:", 135, 49.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text("HEAVY CRANES & VEHICLES", 165, 49.5);
 
     const tableRows: any[] = [];
     filteredEquipment.forEach((eq, index) => {
@@ -453,7 +597,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     });
 
     autoTable(doc, {
-      startY: 38,
+      startY: 55,
       head: [["S.No", "Site No", "Site Location / Name", "Equipment Type", "Plate No", "Capacity", "Status / Ownership", "Last Updated"]],
       body: tableRows,
       theme: "striped",

@@ -6,16 +6,46 @@ import { Delivery, Erection, Site } from "../types";
 import { db, collection, getDocs, onSnapshot } from "../lib/firebase";
 
 const drawARALogo = (doc: any, x: number, y: number, width: number, height: number) => {
-  // Blue Background Arrow/Triangle
+  const drawAbsolutePolygon = (points: {x: number, y: number}[], style: string) => {
+    if (points.length === 0) return;
+    try {
+      if (typeof doc.polygon === "function") {
+        const relativePoints = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+          relativePoints.push({
+            x: points[i].x - points[i - 1].x,
+            y: points[i].y - points[i - 1].y
+          });
+        }
+        doc.polygon(relativePoints, style);
+      } else {
+        // Fallback: draw using lines
+        doc.setLineWidth(0.5);
+        for (let i = 0; i < points.length; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % points.length];
+          doc.line(p1.x, p1.y, p2.x, p2.y);
+        }
+      }
+    } catch (e) {
+      console.error("drawAbsolutePolygon failed:", e);
+    }
+  };
+
+  // Blue Background Arrow/Triangle (3 points)
   const pts1 = [
     { x: x + width * (60 / 120), y: y + height * (6 / 100) },
     { x: x + width * (102 / 120), y: y + height * (82 / 100) },
     { x: x + width * (18 / 120), y: y + height * (82 / 100) }
   ];
   doc.setFillColor(27, 117, 188); // #1b75bc
-  doc.polygon(pts1, "F");
+  try {
+    doc.triangle(pts1[0].x, pts1[0].y, pts1[1].x, pts1[1].y, pts1[2].x, pts1[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(pts1, "F");
+  }
 
-  // Left A
+  // Left A (6 points)
   const ptsLeftA = [
     { x: x + width * (5 / 120), y: y + height * (85 / 100) },
     { x: x + width * (42 / 120), y: y + height * (32 / 100) },
@@ -25,18 +55,22 @@ const drawARALogo = (doc: any, x: number, y: number, width: number, height: numb
     { x: x + width * (52 / 120), y: y + height * (85 / 100) }
   ];
   doc.setFillColor(46, 49, 146); // #2e3192
-  doc.polygon(ptsLeftA, "F");
+  drawAbsolutePolygon(ptsLeftA, "F");
 
-  // Left A cutout
+  // Left A cutout (3 points)
   const ptsLeftCutout = [
     { x: x + width * (34 / 120), y: y + height * (63 / 100) },
     { x: x + width * (26 / 120), y: y + height * (63 / 100) },
     { x: x + width * (30 / 120), y: y + height * (52 / 100) }
   ];
   doc.setFillColor(255, 255, 255);
-  doc.polygon(ptsLeftCutout, "F");
+  try {
+    doc.triangle(ptsLeftCutout[0].x, ptsLeftCutout[0].y, ptsLeftCutout[1].x, ptsLeftCutout[1].y, ptsLeftCutout[2].x, ptsLeftCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsLeftCutout, "F");
+  }
 
-  // Middle R
+  // Middle R (13 points)
   const ptsR = [
     { x: x + width * (38 / 120), y: y + height * (38 / 100) },
     { x: x + width * (70 / 120), y: y + height * (38 / 100) },
@@ -53,9 +87,9 @@ const drawARALogo = (doc: any, x: number, y: number, width: number, height: numb
     { x: x + width * (38 / 120), y: y + height * (85 / 100) }
   ];
   doc.setFillColor(46, 49, 146); // #2e3192
-  doc.polygon(ptsR, "F");
+  drawAbsolutePolygon(ptsR, "F");
 
-  // Middle R Cutout
+  // Middle R Cutout (4 points)
   const ptsRCutout = [
     { x: x + width * (48 / 120), y: y + height * (44 / 100) },
     { x: x + width * (66 / 120), y: y + height * (44 / 100) },
@@ -63,9 +97,9 @@ const drawARALogo = (doc: any, x: number, y: number, width: number, height: numb
     { x: x + width * (48 / 120), y: y + height * (48 / 100) }
   ];
   doc.setFillColor(255, 255, 255);
-  doc.polygon(ptsRCutout, "F");
+  drawAbsolutePolygon(ptsRCutout, "F");
 
-  // Right A
+  // Right A (6 points)
   const ptsRightA = [
     { x: x + width * (66 / 120), y: y + height * (85 / 100) },
     { x: x + width * (70 / 120), y: y + height * (76 / 100) },
@@ -75,16 +109,20 @@ const drawARALogo = (doc: any, x: number, y: number, width: number, height: numb
     { x: x + width * (115 / 120), y: y + height * (85 / 100) }
   ];
   doc.setFillColor(46, 49, 146); // #2e3192
-  doc.polygon(ptsRightA, "F");
+  drawAbsolutePolygon(ptsRightA, "F");
 
-  // Right A cutout
+  // Right A cutout (3 points)
   const ptsRightCutout = [
     { x: x + width * (82 / 120), y: y + height * (52 / 100) },
     { x: x + width * (78 / 120), y: y + height * (63 / 100) },
     { x: x + width * (86 / 120), y: y + height * (63 / 100) }
   ];
   doc.setFillColor(255, 255, 255);
-  doc.polygon(ptsRightCutout, "F");
+  try {
+    doc.triangle(ptsRightCutout[0].x, ptsRightCutout[0].y, ptsRightCutout[1].x, ptsRightCutout[1].y, ptsRightCutout[2].x, ptsRightCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsRightCutout, "F");
+  }
 };
 
 interface ReportExportProps {
@@ -643,67 +681,104 @@ export default function ReportExport({
       const purpleColor = [126, 34, 206]; // Purple 700
       const textDark = [15, 23, 42]; // Slate 900
 
-      // Header band
-      doc.setFillColor(241, 245, 249);
-      doc.rect(0, 0, 210, 32, "F");
+      // 1. Draw Centered ARA Logo
+      const logoWidth = 18;
+      const logoHeight = 14;
+      const logoX = (210 - logoWidth) / 2; // ~96mm
+      const logoY = 8;
+      drawARALogo(doc, logoX, logoY, logoWidth, logoHeight);
 
-      // Left border accent
-      doc.setFillColor(37, 99, 235);
-      doc.rect(0, 0, 4, 32, "F");
-
-      // Header details
+      // 2. Company Name Center (AL RASHID ABETONG)
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("ARA SEARCH & PERFORMANCE REPORT", 12, 12);
+      doc.setFontSize(15);
+      doc.setTextColor(27, 38, 59); // deep corporate blue/slate
+      doc.text("AL RASHID ABETONG", 105, 27, { align: "center" });
 
-      doc.setFont("helvetica", "normal");
+      // 3. Subtitle Center (THE PRECAST COMPANY)
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
+      doc.setTextColor(115, 115, 115); // neutral gray
+      doc.text("THE PRECAST COMPANY", 105, 31, { align: "center" });
+
+      // 4. Report Title Center
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text("ARA SEARCH & PERFORMANCE REPORT", 105, 37, { align: "center" });
+
+      // 5. Divider Line
+      doc.setDrawColor(203, 213, 225); // Slate 300
+      doc.setLineWidth(0.4);
+      doc.line(12, 40, 198, 40);
+
+      // 6. Draw details on both sides
+      // Left side details (Aligned Left starting at X = 12)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
       doc.setTextColor(100, 116, 139);
-      doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 18);
-      doc.text(`Search Criteria: Emp: ${searchEmpId || "ALL"} | Site: ${searchSiteNo || "ALL"} | Date: ${searchDate || "ALL"} | Element: ${searchElementCode || "ALL"}`, 12, 23);
+      doc.text("EMPLOYEE FILTER:", 12, 45);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(searchEmpId || "ALL EMPLOYEES", 42, 45);
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 130, 12);
+      doc.setTextColor(100, 116, 139);
+      doc.text("PROJECT SITE NO:", 12, 49.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(searchSiteNo || "ALL ACTIVE SITES", 42, 49.5);
+
+      // Right side details (Aligned Left starting at X = 135)
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("GENERATED DATE:", 135, 45);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(new Date().toLocaleDateString(), 165, 45);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("FILTER DATE / CODE:", 135, 49.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(`${searchDate || "ANY"} / ${searchElementCode || "ANY"}`, 165, 49.5);
 
       // Section 1: Summary Stats
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("QUERY METRICS SUMMARY", 12, 38);
+      doc.text("QUERY METRICS SUMMARY", 12, 59);
 
-      // Draw two boxes
+      // Draw two boxes starting at Y = 62
       doc.setFillColor(248, 250, 252);
-      doc.rect(12, 42, 90, 20, "F");
+      doc.rect(12, 62, 90, 18, "F");
       doc.setDrawColor(226, 232, 240);
-      doc.rect(12, 42, 90, 20, "S");
+      doc.rect(12, 62, 90, 18, "S");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(100, 116, 139);
-      doc.text("TOTAL DELIVERIES RECEIVED", 16, 47);
-      doc.setFontSize(11);
+      doc.text("TOTAL DELIVERIES RECEIVED", 16, 67);
+      doc.setFontSize(10.5);
       doc.setTextColor(37, 99, 235);
-      doc.text(`${searchResults.totalDelQty} PCS (${searchResults.totalDelWeight.toFixed(2)} Tons)`, 16, 54);
+      doc.text(`${searchResults.totalDelQty} PCS (${searchResults.totalDelWeight.toFixed(2)} Tons)`, 16, 73);
 
       doc.setFillColor(248, 250, 252);
-      doc.rect(108, 42, 90, 20, "F");
+      doc.rect(108, 62, 90, 18, "F");
       doc.setDrawColor(226, 232, 240);
-      doc.rect(108, 42, 90, 20, "S");
+      doc.rect(108, 62, 90, 18, "S");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(100, 116, 139);
-      doc.text("TOTAL ASSEMBLY ERECTED", 112, 47);
-      doc.setFontSize(11);
+      doc.text("TOTAL ASSEMBLY ERECTED", 112, 67);
+      doc.setFontSize(10.5);
       doc.setTextColor(126, 34, 206);
-      doc.text(`${searchResults.totalEreQty} PCS (${searchResults.totalEreWeight.toFixed(2)} Tons)`, 112, 54);
+      doc.text(`${searchResults.totalEreQty} PCS (${searchResults.totalEreWeight.toFixed(2)} Tons)`, 112, 73);
 
       // Section 2: Deliveries Table
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("1. MATCHED DELIVERIES RECEIVED", 12, 70);
+      doc.text("1. MATCHED DELIVERIES RECEIVED", 12, 87);
 
       const delData = searchResults.deliveries.map(d => [
         d.createdAt ? d.createdAt.split("T")[0] : "N/A",
@@ -712,13 +787,14 @@ export default function ReportExport({
         d.elementType || "",
         d.quantity || 1,
         (d.totalWeight || 0).toFixed(2),
-        d.unloadingDetails?.unloaderName || ""
+        d.unloadingDetails?.unloaderName || "",
+        d.unloadingDetails?.equipmentType ? `${d.unloadingDetails.equipmentType} (${d.unloadingDetails.capacity || 0}T) [${d.unloadingDetails.equipmentPlateNo || "-"}]` : (d.unloadingDetails?.equipmentPlateNo || "-")
       ]);
 
       autoTable(doc, {
-        startY: 73,
-        head: [["Date", "MDR No", "Element Code", "Type", "Qty", "Weight (T)", "Receiver/Unloader"]],
-        body: delData.length > 0 ? delData : [["-", "-", "No deliveries match criteria", "-", "-", "-", "-"]],
+        startY: 90,
+        head: [["Date", "MDR No", "Element Code", "Type", "Qty", "Weight (T)", "Receiver/Unloader", "Crane / Equipment"]],
+        body: delData.length > 0 ? delData : [["-", "-", "No deliveries match criteria", "-", "-", "-", "-", "-"]],
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [30, 41, 59] }
       });
@@ -736,13 +812,14 @@ export default function ReportExport({
         e.elementType || "",
         e.quantity || 1,
         (e.totalWeight || 0).toFixed(2),
-        e.erectionDetails?.erectorName || ""
+        e.erectionDetails?.erectorName || "",
+        e.erectionDetails?.equipmentType ? `${e.erectionDetails.equipmentType} (${e.erectionDetails.capacity || 0}T) [${e.erectionDetails.equipmentPlateNo || "-"}]` : (e.erectionDetails?.equipmentPlateNo || "-")
       ]);
 
       autoTable(doc, {
         startY: finalY + 3,
-        head: [["Date", "Element Code", "Type", "Qty", "Weight (T)", "Erector/Supervisor"]],
-        body: ereData.length > 0 ? ereData : [["-", "No erections match criteria", "-", "-", "-", "-"]],
+        head: [["Date", "Element Code", "Type", "Qty", "Weight (T)", "Erector/Supervisor", "Equipment Crane"]],
+        body: ereData.length > 0 ? ereData : [["-", "No erections match criteria", "-", "-", "-", "-", "-"]],
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [126, 34, 206] }
       });
@@ -792,71 +869,99 @@ export default function ReportExport({
       const purpleColor = [126, 34, 206]; // Purple 700
       const textDark = [15, 23, 42]; // Slate 900
       
-      // Header band
-      doc.setFillColor(241, 245, 249); // Slate 100
-      doc.rect(0, 0, 210, 32, "F");
-      
-      // Left border accent
-      doc.setFillColor(37, 99, 235); // Blue 600
-      doc.rect(0, 0, 4, 32, "F");
-      
-      // Header details
+      // 1. Draw Centered ARA Logo
+      const logoWidth = 18;
+      const logoHeight = 14;
+      const logoX = (210 - logoWidth) / 2; // ~96mm
+      const logoY = 8;
+      drawARALogo(doc, logoX, logoY, logoWidth, logoHeight);
+
+      // 2. Company Name Center (AL RASHID ABETONG)
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("ARA PRECAST CONSTRUCTION SYSTEM", 12, 13);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text("Precast Construction Receiving & Erection Field Office System", 12, 19);
-      doc.text(`Project Site No. ${selectedSite?.siteNo || "N/A"} (${selectedSite?.name || "N/A"})`, 12, 24);
-      
-      // Right header info
+      doc.setFontSize(15);
+      doc.setTextColor(27, 38, 59); // deep corporate blue/slate
+      doc.text("AL RASHID ABETONG", 105, 27, { align: "center" });
+
+      // 3. Subtitle Center (THE PRECAST COMPANY)
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]);
-      doc.text(selectedEmployeeName !== "all" ? "EMPLOYEE PROGRESS REPORT" : "FIELD AUDIT SUMMARY REPORT", 130, 13, { align: "left" });
-      
-      doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
+      doc.setTextColor(115, 115, 115); // neutral gray
+      doc.text("THE PRECAST COMPANY", 105, 31, { align: "center" });
+
+      // 4. Report Title Center
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      const titleText = selectedEmployeeName !== "all" ? "EMPLOYEE PROGRESS REPORT" : "FIELD AUDIT SUMMARY REPORT";
+      doc.text(titleText, 105, 37, { align: "center" });
+
+      // 5. Divider Line
+      doc.setDrawColor(203, 213, 225); // Slate 300
+      doc.setLineWidth(0.4);
+      doc.line(12, 40, 198, 40);
+
+      // 6. Draw details on both sides
+      // Left side details (Aligned Left starting at X = 12)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 130, 19);
-      doc.text(`Period: ${filterPeriod.toUpperCase()}`, 130, 24);
-      
+      doc.text("PROJECT SITE:", 12, 45);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      const siteText = selectedSite ? `Site No. ${selectedSite.siteNo} - ${selectedSite.name}` : "ALL ACTIVE SITES";
+      doc.text(siteText, 35, 45);
+
       if (selectedEmployeeName !== "all") {
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(purpleColor[0], purpleColor[1], purpleColor[2]);
-        doc.text(`Employee: ${selectedEmployeeName.toUpperCase()}`, 130, 29);
+        doc.setTextColor(100, 116, 139);
+        doc.text("SUPERVISOR:", 12, 49.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(126, 34, 206);
+        doc.text(selectedEmployeeName.toUpperCase(), 35, 49.5);
       }
+
+      // Right side details (Aligned Left starting at X = 135)
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("GENERATED DATE:", 135, 45);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(new Date().toLocaleDateString(), 165, 45);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("FILTER PERIOD:", 135, 49.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(filterPeriod.toUpperCase(), 165, 49.5);
       
       // Key Performance Metrics section
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("KEY FIGURES & STOCK SUMMARY", 12, 42);
+      doc.text("KEY FIGURES & STOCK SUMMARY", 12, 59);
       
-      // Draws 3 boxes for statistics
+      // Draws 3 boxes for statistics starting at Y = 62
       const drawStatBox = (x: number, title: string, value: string, sub: string, titleColor: number[]) => {
         doc.setFillColor(248, 250, 252); // Slate 50
-        doc.rect(x, 46, 58, 24, "F");
+        doc.rect(x, 62, 58, 20, "F");
         doc.setDrawColor(226, 232, 240); // Slate 200
         doc.setLineWidth(0.2);
-        doc.rect(x, 46, 58, 24, "S");
+        doc.rect(x, 62, 58, 20, "S");
         
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(title, x + 4, 51);
+        doc.text(title, x + 4, 67);
         
-        doc.setFontSize(10.5);
+        doc.setFontSize(10);
         doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
-        doc.text(value, x + 4, 58);
+        doc.text(value, x + 4, 73);
         
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6.5);
         doc.setTextColor(148, 163, 184);
-        doc.text(sub, x + 4, 65);
+        doc.text(sub, x + 4, 79);
       };
       
       drawStatBox(12, "TOTAL DELIVERIES RECEIVED", `${repDelQty} PCS / ${repDelWeight.toFixed(2)} T`, "* Includes damage/rejected logs", [16, 185, 129]);
@@ -870,7 +975,7 @@ export default function ReportExport({
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text(`1. PRECAST DELIVERIES RECEIVED LOGS (${employeeFilteredData.deliveries.length} ITEMS)`, 12, 80);
+      doc.text(`1. PRECAST DELIVERIES RECEIVED LOGS (${employeeFilteredData.deliveries.length} ITEMS)`, 12, 88);
       
       const deliveriesRows = employeeFilteredData.deliveries.map(d => [
         d.mdrNo || "",
@@ -880,12 +985,12 @@ export default function ReportExport({
         Number(d.weight).toFixed(2),
         d.quantity || 1,
         (d.status || "").toUpperCase(),
-        d.unloadingDetails?.equipmentPlateNo || d.unloadingDetails?.equipmentType || "",
+        d.unloadingDetails?.equipmentType ? `${d.unloadingDetails.equipmentType} (${d.unloadingDetails.capacity || 0}T) [${d.unloadingDetails.equipmentPlateNo || "-"}]` : (d.unloadingDetails?.equipmentPlateNo || "-"),
         new Date(d.createdAt).toLocaleDateString()
       ]);
       
       autoTable(doc, {
-        startY: 84,
+        startY: 91,
         head: [["MDR Slip", "Trailer No", "Element Code", "Type", "Weight (T)", "Qty", "Status", "Crane/Equip", "Date"]],
         body: deliveriesRows,
         styles: { fontSize: 7, cellPadding: 1.5, font: "helvetica" },
@@ -910,7 +1015,7 @@ export default function ReportExport({
         Number(e.totalWeight).toFixed(2),
         (e.status || "").toUpperCase(),
         `${e.zone || ""}-${e.buildingNo || ""}`,
-        e.erectionDetails?.equipmentPlateNo || e.erectionDetails?.equipmentType || "",
+        e.erectionDetails?.equipmentType ? `${e.erectionDetails.equipmentType} (${e.erectionDetails.capacity || 0}T) [${e.erectionDetails.equipmentPlateNo || "-"}]` : (e.erectionDetails?.equipmentPlateNo || "-"),
         new Date(e.createdAt).toLocaleDateString()
       ]);
       
@@ -1693,8 +1798,8 @@ export default function ReportExport({
                         <td className="p-1 px-2 text-center">{d.quantity}</td>
                         <td className="p-1 px-2 text-right font-bold">{d.totalWeight.toFixed(3)}</td>
                         <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
-                        <td className="p-1 px-2 font-semibold">
-                          {d.unloadingDetails?.equipmentPlateNo || d.unloadingDetails?.equipmentType || "-"}
+                        <td className="p-1 px-2 font-semibold text-blue-900">
+                          {d.unloadingDetails?.equipmentType ? `${d.unloadingDetails.equipmentType} (${d.unloadingDetails.capacity}T) [${d.unloadingDetails.equipmentPlateNo || "-"}]` : (d.unloadingDetails?.equipmentPlateNo || "-")}
                         </td>
                         <td className="p-1 px-2 text-gray-500">
                           {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
@@ -1743,8 +1848,8 @@ export default function ReportExport({
                         <td className="p-1 px-2 text-gray-500">
                           {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
                         </td>
-                        <td className="p-1 px-2">
-                          {e.erectionDetails?.equipmentPlateNo || e.erectionDetails?.equipmentType || "-"}
+                        <td className="p-1 px-2 font-semibold text-purple-900">
+                          {e.erectionDetails?.equipmentType ? `${e.erectionDetails.equipmentType} (${e.erectionDetails.capacity}T) [${e.erectionDetails.equipmentPlateNo || "-"}]` : (e.erectionDetails?.equipmentPlateNo || "-")}
                         </td>
                         <td className="p-1 px-2 font-mono text-gray-400">{new Date(e.createdAt).toLocaleDateString()}</td>
                       </tr>
@@ -1854,6 +1959,7 @@ export default function ReportExport({
                         <th className="p-1 px-2">TYPE</th>
                         <th className="p-1 px-2 text-right">WEIGHT (T)</th>
                         <th className="p-1 px-2">STATUS</th>
+                        <th className="p-1 px-2">CRANE / EQUIPMENT</th>
                         <th className="p-1 px-2">COORDINATES</th>
                         <th className="p-1 px-2">DATE</th>
                       </tr>
@@ -1867,6 +1973,9 @@ export default function ReportExport({
                             <td className="p-1 px-2">{d.elementType}</td>
                             <td className="p-1 px-2 text-right">{d.totalWeight.toFixed(3)}</td>
                             <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
+                            <td className="p-1 px-2 font-semibold text-blue-900">
+                              {d.unloadingDetails?.equipmentType ? `${d.unloadingDetails.equipmentType} (${d.unloadingDetails.capacity}T) [${d.unloadingDetails.equipmentPlateNo || "-"}]` : (d.unloadingDetails?.equipmentPlateNo || "-")}
+                            </td>
                             <td className="p-1 px-2 text-gray-500">
                               {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
                             </td>
@@ -1875,7 +1984,7 @@ export default function ReportExport({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="p-2 text-center text-gray-400 italic">No unloading records found for this supervisor at this site.</td>
+                          <td colSpan={8} className="p-2 text-center text-gray-400 italic">No unloading records found for this supervisor at this site.</td>
                         </tr>
                       )}
                     </tbody>
@@ -1893,6 +2002,7 @@ export default function ReportExport({
                         <th className="p-1 px-2">TYPE</th>
                         <th className="p-1 px-2 text-right">WEIGHT (T)</th>
                         <th className="p-1 px-2">STATUS</th>
+                        <th className="p-1 px-2">EQUIPMENT CRANE</th>
                         <th className="p-1 px-2">COORDINATES</th>
                         <th className="p-1 px-2">DATE</th>
                       </tr>
@@ -1905,6 +2015,9 @@ export default function ReportExport({
                             <td className="p-1 px-2">{e.elementType}</td>
                             <td className="p-1 px-2 text-right">{e.totalWeight.toFixed(3)}</td>
                             <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
+                            <td className="p-1 px-2 font-semibold text-purple-900">
+                              {e.erectionDetails?.equipmentType ? `${e.erectionDetails.equipmentType} (${e.erectionDetails.capacity}T) [${e.erectionDetails.equipmentPlateNo || "-"}]` : (e.erectionDetails?.equipmentPlateNo || "-")}
+                            </td>
                             <td className="p-1 px-2 text-gray-500">
                               {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
                             </td>
@@ -1913,7 +2026,7 @@ export default function ReportExport({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="p-2 text-center text-gray-400 italic">No erection records found for this supervisor at this site.</td>
+                          <td colSpan={7} className="p-2 text-center text-gray-400 italic">No erection records found for this supervisor at this site.</td>
                         </tr>
                       )}
                     </tbody>
@@ -2014,6 +2127,7 @@ export default function ReportExport({
                     <th className="p-1 px-2 text-right">WEIGHT (T)</th>
                     <th className="p-1 px-2">STATUS</th>
                     <th className="p-1 px-2">RECEIVER</th>
+                    <th className="p-1 px-2">CRANE / EQUIPMENT</th>
                     <th className="p-1 px-2">COORDINATES</th>
                     <th className="p-1 px-2">DATE</th>
                   </tr>
@@ -2028,6 +2142,9 @@ export default function ReportExport({
                         <td className="p-1 px-2 text-right">{d.totalWeight.toFixed(3)}</td>
                         <td className="p-1 px-2 font-bold">{d.status.toUpperCase()}</td>
                         <td className="p-1 px-2">{d.unloadingDetails?.unloaderName || "-"}</td>
+                        <td className="p-1 px-2 font-semibold text-blue-900">
+                          {d.unloadingDetails?.equipmentType ? `${d.unloadingDetails.equipmentType} (${d.unloadingDetails.capacity}T) [${d.unloadingDetails.equipmentPlateNo || "-"}]` : (d.unloadingDetails?.equipmentPlateNo || "-")}
+                        </td>
                         <td className="p-1 px-2 text-gray-500">
                           {d.zone || "-"} / {d.villaType || "-"} / B:{d.buildingNo || "-"}
                         </td>
@@ -2036,7 +2153,7 @@ export default function ReportExport({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="p-2 text-center text-gray-400 italic">No unloading records matching query found.</td>
+                      <td colSpan={9} className="p-2 text-center text-gray-400 italic">No unloading records matching query found.</td>
                     </tr>
                   )}
                 </tbody>
@@ -2055,6 +2172,7 @@ export default function ReportExport({
                     <th className="p-1 px-2 text-right">WEIGHT (T)</th>
                     <th className="p-1 px-2">STATUS</th>
                     <th className="p-1 px-2">ERECTOR</th>
+                    <th className="p-1 px-2">EQUIPMENT CRANE</th>
                     <th className="p-1 px-2">COORDINATES</th>
                     <th className="p-1 px-2">DATE</th>
                   </tr>
@@ -2068,6 +2186,9 @@ export default function ReportExport({
                         <td className="p-1 px-2 text-right">{e.totalWeight.toFixed(3)}</td>
                         <td className="p-1 px-2 font-bold">{e.status.toUpperCase()}</td>
                         <td className="p-1 px-2">{e.erectionDetails?.erectorName || "-"}</td>
+                        <td className="p-1 px-2 font-semibold text-purple-900">
+                          {e.erectionDetails?.equipmentType ? `${e.erectionDetails.equipmentType} (${e.erectionDetails.capacity}T) [${e.erectionDetails.equipmentPlateNo || "-"}]` : (e.erectionDetails?.equipmentPlateNo || "-")}
+                        </td>
                         <td className="p-1 px-2 text-gray-500">
                           {e.zone || "-"} / {e.villaType || "-"} / H:{e.houseNo || "-"}
                         </td>
@@ -2076,7 +2197,7 @@ export default function ReportExport({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="p-2 text-center text-gray-400 italic">No erection records matching query found.</td>
+                      <td colSpan={8} className="p-2 text-center text-gray-400 italic">No erection records matching query found.</td>
                     </tr>
                   )}
                 </tbody>

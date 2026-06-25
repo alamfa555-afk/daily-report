@@ -5,6 +5,126 @@ import { FileSpreadsheet, FileText, Loader2, Sparkles, Building2, Package, Boxes
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const drawARALogo = (doc: any, x: number, y: number, width: number, height: number) => {
+  const drawAbsolutePolygon = (points: {x: number, y: number}[], style: string) => {
+    if (points.length === 0) return;
+    try {
+      if (typeof doc.polygon === "function") {
+        const relativePoints = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+          relativePoints.push({
+            x: points[i].x - points[i - 1].x,
+            y: points[i].y - points[i - 1].y
+          });
+        }
+        doc.polygon(relativePoints, style);
+      } else {
+        // Fallback: draw using lines
+        doc.setLineWidth(0.5);
+        for (let i = 0; i < points.length; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % points.length];
+          doc.line(p1.x, p1.y, p2.x, p2.y);
+        }
+      }
+    } catch (e) {
+      console.error("drawAbsolutePolygon failed:", e);
+    }
+  };
+
+  // Blue Background Arrow/Triangle (3 points)
+  const pts1 = [
+    { x: x + width * (60 / 120), y: y + height * (6 / 100) },
+    { x: x + width * (102 / 120), y: y + height * (82 / 100) },
+    { x: x + width * (18 / 120), y: y + height * (82 / 100) }
+  ];
+  doc.setFillColor(27, 117, 188); // #1b75bc
+  try {
+    doc.triangle(pts1[0].x, pts1[0].y, pts1[1].x, pts1[1].y, pts1[2].x, pts1[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(pts1, "F");
+  }
+
+  // Left A (6 points)
+  const ptsLeftA = [
+    { x: x + width * (5 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (42 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (54 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (24 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (52 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsLeftA, "F");
+
+  // Left A cutout (3 points)
+  const ptsLeftCutout = [
+    { x: x + width * (34 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (26 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (30 / 120), y: y + height * (52 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  try {
+    doc.triangle(ptsLeftCutout[0].x, ptsLeftCutout[0].y, ptsLeftCutout[1].x, ptsLeftCutout[1].y, ptsLeftCutout[2].x, ptsLeftCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsLeftCutout, "F");
+  }
+
+  // Middle R (13 points)
+  const ptsR = [
+    { x: x + width * (38 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (38 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (39 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (41.5 / 100) },
+    { x: x + width * (80 / 120), y: y + height * (46 / 100) },
+    { x: x + width * (78.5 / 120), y: y + height * (50.5 / 100) },
+    { x: x + width * (75 / 120), y: y + height * (53 / 100) },
+    { x: x + width * (57 / 120), y: y + height * (54 / 100) },
+    { x: x + width * (72 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (60 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (58 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (38 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsR, "F");
+
+  // Middle R Cutout (4 points)
+  const ptsRCutout = [
+    { x: x + width * (48 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (44 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (48 / 100) },
+    { x: x + width * (48 / 120), y: y + height * (48 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  drawAbsolutePolygon(ptsRCutout, "F");
+
+  // Right A (6 points)
+  const ptsRightA = [
+    { x: x + width * (66 / 120), y: y + height * (85 / 100) },
+    { x: x + width * (70 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (94 / 120), y: y + height * (76 / 100) },
+    { x: x + width * (66 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (32 / 100) },
+    { x: x + width * (115 / 120), y: y + height * (85 / 100) }
+  ];
+  doc.setFillColor(46, 49, 146); // #2e3192
+  drawAbsolutePolygon(ptsRightA, "F");
+
+  // Right A cutout (3 points)
+  const ptsRightCutout = [
+    { x: x + width * (82 / 120), y: y + height * (52 / 100) },
+    { x: x + width * (78 / 120), y: y + height * (63 / 100) },
+    { x: x + width * (86 / 120), y: y + height * (63 / 100) }
+  ];
+  doc.setFillColor(255, 255, 255);
+  try {
+    doc.triangle(ptsRightCutout[0].x, ptsRightCutout[0].y, ptsRightCutout[1].x, ptsRightCutout[1].y, ptsRightCutout[2].x, ptsRightCutout[2].y, "F");
+  } catch (e) {
+    drawAbsolutePolygon(ptsRightCutout, "F");
+  }
+};
+
 interface SiteInventoryProps {
   sites: Site[];
   initialSelectedSite: Site | null;
@@ -245,58 +365,88 @@ export default function SiteInventory({ sites, initialSelectedSite }: SiteInvent
 
       const textDark = [15, 23, 42];
 
-      // Header Band
-      doc.setFillColor(241, 245, 249);
-      doc.rect(0, 0, 210, 32, "F");
-      doc.setFillColor(37, 99, 235);
-      doc.rect(0, 0, 4, 32, "F");
+      // 1. Draw Centered ARA Logo
+      const logoWidth = 18;
+      const logoHeight = 14;
+      const logoX = (210 - logoWidth) / 2; // ~96mm
+      const logoY = 8;
+      drawARALogo(doc, logoX, logoY, logoWidth, logoHeight);
 
-      // Header Text
+      // 2. Company Name Center (AL RASHID ABETONG)
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("ARA SITE INVENTORY STOCK BALANCE REPORT", 12, 12);
+      doc.setFontSize(15);
+      doc.setTextColor(27, 38, 59); // deep corporate blue/slate
+      doc.text("AL RASHID ABETONG", 105, 27, { align: "center" });
 
-      doc.setFont("helvetica", "normal");
+      // 3. Subtitle Center (THE PRECAST COMPANY)
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
+      doc.setTextColor(115, 115, 115); // neutral gray
+      doc.text("THE PRECAST COMPANY", 105, 31, { align: "center" });
+
+      // 4. Report Title Center
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text("SITE INVENTORY STOCK BALANCE REPORT", 105, 37, { align: "center" });
+
+      // 5. Divider Line
+      doc.setDrawColor(203, 213, 225); // Slate 300
+      doc.setLineWidth(0.4);
+      doc.line(12, 40, 198, 40);
+
+      // 6. Draw details on both sides
+      // Left side details (Aligned Left starting at X = 12)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
       doc.setTextColor(100, 116, 139);
-      doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 17);
-
-      // Highlight Active Site Reference beautifully with background pill
-      doc.setFillColor(239, 246, 255); // light blue
-      doc.setDrawColor(191, 219, 254); // border blue
-      doc.roundedRect(12, 21, 125, 7, 1, 1, "FD"); // rounded rect
-      
+      doc.text("ACTIVE SITE:", 12, 45);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 58, 138); // deep blue
-      doc.text(`Active Site Reference: Site No. ${activeSite?.siteNo || "N/A"} - ${activeSite?.name || "N/A"}`, 15, 25.5);
+      doc.setTextColor(30, 41, 59);
+      const siteText = activeSite ? `Site No. ${activeSite.siteNo} - ${activeSite.name}` : "N/A";
+      doc.text(siteText, 32, 45);
+
+      // Right side details (Aligned Left starting at X = 135)
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("GENERATED DATE:", 135, 45);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text(new Date().toLocaleDateString(), 165, 45);
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(37, 99, 235);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 130, 12);
+      doc.setTextColor(100, 116, 139);
+      doc.text("LEDGER SOURCE:", 135, 49.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text("REAL-TIME OPERATIONS", 165, 49.5);
 
-      // Stat Boxes
+      // Stat Boxes Title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+      doc.text("KEY FIGURES & STOCK SUMMARY", 12, 59);
+
+      // Stat Boxes starting at Y = 62
       const drawStatBox = (x: number, title: string, qty: number, wt: number, rgb: number[]) => {
         doc.setFillColor(248, 250, 252);
-        doc.rect(x, 38, 58, 20, "F");
+        doc.rect(x, 62, 58, 20, "F");
         doc.setDrawColor(226, 232, 240);
-        doc.rect(x, 38, 58, 20, "S");
+        doc.rect(x, 62, 58, 20, "S");
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
         doc.setTextColor(100, 116, 139);
-        doc.text(title, x + 3, 43);
+        doc.text(title, x + 3, 67);
 
         doc.setFontSize(9.5);
         doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-        doc.text(`${qty} PCS / ${wt.toFixed(2)} T`, x + 3, 50);
+        doc.text(`${qty} PCS / ${wt.toFixed(2)} T`, x + 3, 73);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6.5);
         doc.setTextColor(148, 163, 184);
-        doc.text("* Real-time ledger records", x + 3, 55);
+        doc.text("* Real-time ledger records", x + 3, 79);
       };
 
       drawStatBox(12, "TOTAL RECEIVED PRECAST", summaryTotals.totalRecQty, summaryTotals.totalRecWt, [16, 185, 129]);
@@ -307,7 +457,7 @@ export default function SiteInventory({ sites, initialSelectedSite }: SiteInvent
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-      doc.text("ITEMIZED PRECAST STOCK BREAKDOWN", 12, 66);
+      doc.text("ITEMIZED PRECAST STOCK BREAKDOWN", 12, 88);
 
       const tableRows = itemizedInventory.map(item => [
         item.elementCode,
@@ -323,7 +473,7 @@ export default function SiteInventory({ sites, initialSelectedSite }: SiteInvent
       ]);
 
       autoTable(doc, {
-        startY: 69,
+        startY: 91,
         head: [["Element Code", "Type", "Rec Qty", "Rec Wt (T)", "Ere Qty", "Ere Wt (T)", "Bal Qty", "Bal Wt (T)", "Dmg", "Rej"]],
         body: tableRows,
         styles: { fontSize: 7, cellPadding: 1.5 },
