@@ -68,6 +68,7 @@ export default function ErectionForm({
   const [capacity, setCapacity] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [operatorId, setOperatorId] = useState("");
+  const [equipmentStatus, setEquipmentStatus] = useState<"ARA" | "rented">("ARA");
 
   // Dynamic Product Items (Initially 1 item loaded)
   const [items, setItems] = useState<ProductItem[]>([
@@ -284,7 +285,7 @@ export default function ErectionForm({
             equipmentType: equipmentType.trim() || "Mobile Crane",
             plateNo: plate,
             capacity: Number(capacity) || 25,
-            status: "ARA" as const,
+            status: equipmentStatus,
             ownerName: operatorName.trim() ? `Operator: ${operatorName.trim()}` : "",
             updatedAt: new Date().toISOString()
           };
@@ -372,7 +373,7 @@ export default function ErectionForm({
         equipmentType: equipmentType.trim() || "Mobile Crane",
         plateNo: plate,
         capacity: Number(capacity) || 25,
-        status: "ARA" as const,
+        status: equipmentStatus,
         ownerName: operatorName.trim() ? `Operator: ${operatorName.trim()}` : "",
         updatedAt: new Date().toISOString()
       };
@@ -411,6 +412,7 @@ export default function ErectionForm({
     setCapacity("");
     setOperatorName("");
     setOperatorId("");
+    setEquipmentStatus("ARA");
     setRemarks("");
     setItems([
       {
@@ -632,7 +634,7 @@ export default function ErectionForm({
         <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider mb-3 border-b border-slate-800/80 pb-1.5">
           EQUIPMENT FOR ERECTION
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
           <CustomCombobox
             label="EQUIPMENT TYPE"
             value={equipmentType}
@@ -672,6 +674,20 @@ export default function ErectionForm({
             placeholder="e.g. Jan Bahadur"
             fieldName="operatorName"
           />
+
+          <div>
+            <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
+              OWNERSHIP
+            </label>
+            <select
+              value={equipmentStatus}
+              onChange={(e) => setEquipmentStatus(e.target.value as "ARA" | "rented")}
+              className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none cursor-pointer font-bold [&_option]:bg-slate-950"
+            >
+              <option value="ARA" className="bg-slate-900">Al Rashid (ARA)</option>
+              <option value="rented" className="bg-slate-900">Rented</option>
+            </select>
+          </div>
         </div>
 
         {/* Sync/Register Crane Button */}
