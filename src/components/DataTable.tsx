@@ -224,9 +224,8 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                       <div>{d.unloadingDetails?.equipmentType || "-"} ({d.unloadingDetails?.capacity || 0}T)</div>
                       <div className="text-[10px] text-slate-500">Plate: {d.unloadingDetails?.equipmentPlateNo || "-"}</div>
                     </td>
-                    <td className="px-4 py-4 text-slate-300">
-                      <div className="font-bold text-slate-100">{d.unloadingDetails?.unloaderName || "-"}</div>
-                      <div className="text-[10px] text-slate-500">ID: {d.unloadingDetails?.unloaderId || "-"}</div>
+                    <td className="px-4 py-4 text-slate-100 font-bold">
+                      {d.unloadingDetails?.unloaderName || "-"}
                     </td>
                     <td className="px-4 py-4 text-slate-500 font-mono">
                       {new Date(d.createdAt).toLocaleDateString()}
@@ -417,7 +416,7 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                         className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       />
                     </div>
-                    <div>
+                    <div className="col-span-2">
                       <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Receiver Name (Employee)</label>
                       <input
                         type="text"
@@ -429,24 +428,6 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                             unloadingDetails: {
                               ...(editingRecord.data.unloadingDetails || {}),
                               unloaderName: e.target.value
-                            }
-                          }
-                        })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Receiver ID (Employee ID)</label>
-                      <input
-                        type="text"
-                        value={editingRecord.data.unloadingDetails?.unloaderId || ""}
-                        onChange={(e) => setEditingRecord({
-                          ...editingRecord,
-                          data: {
-                            ...editingRecord.data,
-                            unloadingDetails: {
-                              ...(editingRecord.data.unloadingDetails || {}),
-                              unloaderId: e.target.value
                             }
                           }
                         })}
