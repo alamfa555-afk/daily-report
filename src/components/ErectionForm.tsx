@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Save, Sparkles, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, Sparkles, CheckCircle2, AlertTriangle, X, Check } from "lucide-react";
 import { Site, Erection, ElementStatus, Delivery } from "../types";
-import { db, collection, doc, setDoc, handleFirestoreError, OperationType, query, where, getDocs, addDoc } from "../lib/firebase";
+import { db, collection, doc, setDoc, handleFirestoreError, OperationType, query, where, getDocs, addDoc, updateDoc } from "../lib/firebase";
 import { saveSuggestion } from "../lib/suggestions";
 import CustomCombobox from "./CustomCombobox";
 
@@ -37,6 +37,7 @@ export default function ErectionForm({
   const [loading, setLoading] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
   const [successList, setSuccessList] = useState<string | null>(null);
+  const [syncingCrane, setSyncingCrane] = useState(false);
 
   // New site popup/inline form state
   const [showAddSite, setShowAddSite] = useState(false);
@@ -270,23 +271,33 @@ export default function ErectionForm({
         await saveSuggestion("elementType", item.elementType);
       }
 
-      // Automatically register the crane/equipment in the general directory if not already present
+      // Automatically register or update the crane/equipment in the general directory if plate exists
       if (equipmentPlateNo.trim() && selectedSite) {
         const plate = equipmentPlateNo.trim().toUpperCase();
         try {
           const eqQuery = query(collection(db, "equipment"), where("plateNo", "==", plate));
           const eqSnap = await getDocs(eqQuery);
-          if (eqSnap.empty) {
+          
+          const cranePayload = {
+            siteId: selectedSite.id,
+            siteNo: selectedSite.siteNo,
+            equipmentType: equipmentType.trim() || "Mobile Crane",
+            plateNo: plate,
+            capacity: Number(capacity) || 25,
+            status: "ARA" as const,
+            ownerName: operatorName.trim() ? `Operator: ${operatorName.trim()}` : "",
+            updatedAt: new Date().toISOString()
+          };
+
+          if (!eqSnap.empty) {
+            // Update existing crane
+            const existingDocId = eqSnap.docs[0].id;
+            await updateDoc(doc(db, "equipment", existingDocId), cranePayload);
+          } else {
+            // Add new crane
             await addDoc(collection(db, "equipment"), {
-              siteId: selectedSite.id,
-              siteNo: selectedSite.siteNo,
-              equipmentType: equipmentType.trim() || "Mobile Crane",
-              plateNo: plate,
-              capacity: Number(capacity) || 25,
-              status: "ARA",
-              ownerName: "",
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+              ...cranePayload,
+              createdAt: new Date().toISOString()
             });
           }
         } catch (eqErr) {
@@ -332,6 +343,59 @@ export default function ErectionForm({
       handleFirestoreError(err, OperationType.WRITE, "erections");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle explicit/manual crane registration and sync to Crane Log
+  const handleSyncCrane = async () => {
+    if (!selectedSite) {
+      setErrorList("Please select a Construction Project Site first.");
+      return;
+    }
+    if (!equipmentPlateNo.trim()) {
+      setErrorList("Please enter a Crane Plate Number.");
+      return;
+    }
+
+    setSyncingCrane(true);
+    setErrorList(null);
+    setSuccessList(null);
+
+    try {
+      const plate = equipmentPlateNo.trim().toUpperCase();
+      const eqQuery = query(collection(db, "equipment"), where("plateNo", "==", plate));
+      const eqSnap = await getDocs(eqQuery);
+
+      const cranePayload = {
+        siteId: selectedSite.id,
+        siteNo: selectedSite.siteNo,
+        equipmentType: equipmentType.trim() || "Mobile Crane",
+        plateNo: plate,
+        capacity: Number(capacity) || 25,
+        status: "ARA" as const,
+        ownerName: operatorName.trim() ? `Operator: ${operatorName.trim()}` : "",
+        updatedAt: new Date().toISOString()
+      };
+
+      if (!eqSnap.empty) {
+        // Update existing crane
+        const existingDocId = eqSnap.docs[0].id;
+        await updateDoc(doc(db, "equipment", existingDocId), cranePayload);
+        setSuccessList(`Crane "${plate}" successfully updated in Crane Log directory!`);
+      } else {
+        // Add new crane
+        await addDoc(collection(db, "equipment"), {
+          ...cranePayload,
+          createdAt: new Date().toISOString()
+        });
+        setSuccessList(`Crane "${plate}" successfully registered in Crane Log directory!`);
+      }
+      setTimeout(() => setSuccessList(null), 4000);
+    } catch (err: any) {
+      console.error("Error syncing crane to directory:", err);
+      setErrorList(`Failed to register crane: ${err.message || err}`);
+    } finally {
+      setSyncingCrane(false);
     }
   };
 
@@ -608,6 +672,26 @@ export default function ErectionForm({
             placeholder="e.g. Jan Bahadur"
             fieldName="operatorName"
           />
+        </div>
+
+        {/* Sync/Register Crane Button */}
+        <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="text-[10px] text-slate-400 font-medium">
+            Sync this crane's type, plate number, and capacity to the general Crane Log (Equipment Directory).
+          </span>
+          <button
+            type="button"
+            onClick={handleSyncCrane}
+            disabled={syncingCrane || !equipmentPlateNo.trim() || !selectedSite}
+            className="w-full sm:w-auto bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 font-bold py-1.5 px-4 rounded-lg text-xs uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+          >
+            {syncingCrane ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span>Register Crane in Crane Log</span>
+          </button>
         </div>
       </div>
 
