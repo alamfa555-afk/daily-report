@@ -8,6 +8,7 @@
         "id": { "type": "string", "description": "Unique site ID" },
         "name": { "type": "string", "description": "Name of the site" },
         "siteNo": { "type": "string", "description": "Site number as text" },
+        "projectManager": { "type": "string", "description": "Name of the Project Manager" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },

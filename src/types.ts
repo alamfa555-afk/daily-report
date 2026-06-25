@@ -2,6 +2,7 @@ export interface Site {
   id: string;
   name: string;
   siteNo: string;
+  projectManager?: string;
   createdAt: string;
 }
 

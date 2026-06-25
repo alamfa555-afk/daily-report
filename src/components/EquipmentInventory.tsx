@@ -96,8 +96,15 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     try {
       // Get all existing registered plate numbers
       const registeredPlates = new Set<string>();
-      const q = query(collection(db, "equipment"));
-      const snapshot = await getDocs(q);
+      let snapshot;
+      try {
+        const q = query(collection(db, "equipment"));
+        snapshot = await getDocs(q);
+      } catch (e: any) {
+        console.error("Error reading equipment collection:", e);
+        throw new Error(`[Equipment Collection] ${e.message || e}`);
+      }
+
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.plateNo) {
@@ -106,8 +113,21 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       });
 
       // Get deliveries and erections logs
-      const delSnap = await getDocs(collection(db, "deliveries"));
-      const ereSnap = await getDocs(collection(db, "erections"));
+      let delSnap;
+      try {
+        delSnap = await getDocs(collection(db, "deliveries"));
+      } catch (e: any) {
+        console.error("Error reading deliveries collection:", e);
+        throw new Error(`[Deliveries Collection] ${e.message || e}`);
+      }
+
+      let ereSnap;
+      try {
+        ereSnap = await getDocs(collection(db, "erections"));
+      } catch (e: any) {
+        console.error("Error reading erections collection:", e);
+        throw new Error(`[Erections Collection] ${e.message || e}`);
+      }
 
       const newEquipmentFound: Omit<Equipment, "id">[] = [];
 
@@ -300,9 +320,9 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       }
       resetForm();
       setShowAddForm(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg("Failed to save the equipment record.");
+      setErrorMsg(`Failed to save the equipment record: ${err?.message || String(err)}`);
     }
   };
 

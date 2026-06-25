@@ -23,6 +23,7 @@ export default function SiteSelector({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSiteNo, setNewSiteNo] = useState("");
   const [newSiteName, setNewSiteName] = useState("");
+  const [newProjectManager, setNewProjectManager] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,12 +39,14 @@ export default function SiteSelector({
         id: siteId,
         siteNo: newSiteNo.trim(),
         name: (newSiteName.trim() || `Site ${newSiteNo.trim()}`),
+        projectManager: newProjectManager.trim() || "",
         createdAt: new Date().toISOString()
       };
 
       await addDoc(collection(db, "sites"), sitePayload);
       setNewSiteNo("");
       setNewSiteName("");
+      setNewProjectManager("");
       setShowAddForm(false);
     } catch (err) {
       console.error("Error creating site:", err);
@@ -66,7 +69,7 @@ export default function SiteSelector({
             <h2 className="text-xs font-bold text-slate-100 uppercase tracking-wider">Construction Project Site</h2>
             <p className="text-[10px] text-slate-400 mt-0.5">
               {selectedSite
-                ? `Active: Site No. ${selectedSite.siteNo} (${selectedSite.name})`
+                ? `Active: Site No. ${selectedSite.siteNo} (${selectedSite.name})${selectedSite.projectManager ? ` | PM: ${selectedSite.projectManager}` : ""}`
                 : "No active project site selected"}
             </p>
           </div>
@@ -92,7 +95,7 @@ export default function SiteSelector({
                 <option value="" disabled className="bg-slate-900 text-slate-400">Select Site...</option>
                 {sites.map((site) => (
                   <option key={site.id} value={site.id} className="bg-slate-900 text-slate-100">
-                    No. {site.siteNo} - {site.name}
+                    No. {site.siteNo} - {site.name} {site.projectManager ? `(PM: ${site.projectManager})` : ""}
                   </option>
                 ))}
               </select>
@@ -168,6 +171,18 @@ export default function SiteSelector({
                 value={newSiteName}
                 onChange={(e) => setNewSiteName(e.target.value)}
                 placeholder="e.g. Riyadh Villa Phase 2"
+                className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex-1 w-full">
+              <label className="block text-[9px] font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                PROJECT MANAGER (OPTIONAL)
+              </label>
+              <input
+                type="text"
+                value={newProjectManager}
+                onChange={(e) => setNewProjectManager(e.target.value)}
+                placeholder="e.g. Eng. Khalid"
                 className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
               />
             </div>
