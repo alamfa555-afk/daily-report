@@ -81,3 +81,16 @@ export interface Suggestion {
   value: string;
   createdAt: string;
 }
+
+export interface Equipment {
+  id: string;
+  siteId: string;
+  siteNo: string;
+  equipmentType: string; // mobile crane, crawler crane, forklift, manlift, etc.
+  plateNo: string;
+  capacity: number; // capacity (ton)
+  status: 'rented' | 'ARA';
+  createdAt: string;
+  updatedAt: string;
+}
+

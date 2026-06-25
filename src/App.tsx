@@ -22,6 +22,7 @@ import StatsGrid from "./components/StatsGrid";
 import ReportExport from "./components/ReportExport";
 import DataTable from "./components/DataTable";
 import SiteInventory from "./components/SiteInventory";
+import EquipmentInventory from "./components/EquipmentInventory";
 
 export default function App() {
   // State managers
@@ -34,7 +35,7 @@ export default function App() {
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("");
   
   const [activeFormTab, setActiveFormTab] = useState<"receive" | "erect">("receive");
-  const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory">("logging");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory" | "equipment">("logging");
 
   // Dynamic filter for dashboard
   const filteredDeliveriesForDashboard = useMemo(() => {
@@ -450,6 +451,17 @@ export default function App() {
             >
               📦 SITE INVENTORY
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("equipment")}
+              className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeDashboardTab === "equipment"
+                  ? "bg-cyan-600 text-white shadow-lg shadow-cyan-500/10"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
+            >
+              🏗️ CRANE RECORDS
+            </button>
           </div>
 
           {/* Conditional Rendering based on active dashboard tab */}
@@ -579,6 +591,15 @@ export default function App() {
               <SiteInventory
                 sites={sites}
                 initialSelectedSite={selectedSite}
+              />
+            </div>
+          )}
+
+          {activeDashboardTab === "equipment" && (
+            <div className="animate-fade-in">
+              <EquipmentInventory
+                sites={sites}
+                currentSite={selectedSite}
               />
             </div>
           )}
