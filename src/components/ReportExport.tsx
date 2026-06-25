@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ListFilter, CalendarRange, FileSpreadsheet, FileText, Printer, Percent, Info, Sparkles, Search, UserCheck } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1681,7 +1682,8 @@ export default function ReportExport({
       </div>
 
       {/* Hidden layout specifically customized for PRINTING */}
-      <div className="hidden printing-template absolute top-0 left-0 w-full bg-white text-black p-8 font-sans">
+      {createPortal(
+        <div className="hidden printing-template absolute top-0 left-0 w-full bg-white text-black p-8 font-sans">
         {printSource === "standard" && (
           <>
             <div className="border-b-4 border-blue-800 pb-4 mb-6">
@@ -2213,7 +2215,9 @@ export default function ReportExport({
           <div>AL RASHID ABETONG • Head Office: Riyadh, KSA • Precast Field Quality Operations</div>
           <div className="text-right">Receiver & Erector Digital Stamp Security Verified</div>
         </div>
-      </div>
+      </div>,
+      document.body
+    )}
     </>
   );
 }

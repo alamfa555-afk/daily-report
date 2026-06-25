@@ -29,6 +29,10 @@
     margin: 0 !important;
   }
   
+  #root {
+    display: none !important;
+  }
+  
   /* Hide all interactive app elements */
   .non-printable {
     display: none !important;
