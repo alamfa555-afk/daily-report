@@ -59,24 +59,17 @@ export default function App() {
   // Loaders
   const [loadingSites, setLoadingSites] = useState(true);
 
-  // One-time database sweep to clean up any "Samshad" entry logged without a valid site ID/number
+  // One-time database sweep to clean up any entry logged without a valid site ID/number (such as any orphaned Samshad entries)
   useEffect(() => {
-    const cleanUpSamshadOrphanEntries = async () => {
+    const cleanUpOrphanEntries = async () => {
       try {
         // 1. Deliveries Log sweep
         const delSnapshot = await getDocs(collection(db, "deliveries"));
         for (const docSnapshot of delSnapshot.docs) {
           const data = docSnapshot.data();
-          const unloaderName = data.unloadingDetails?.unloaderName || "";
-          const operatorName = data.unloadingDetails?.operatorName || "";
-          const isSamshad = 
-            unloaderName.toLowerCase().includes("samshad") || 
-            operatorName.toLowerCase().includes("samshad") ||
-            (data.recordedBy && data.recordedBy.toLowerCase().includes("samshad"));
-
           const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isSamshad && isMissingSite) {
-            console.log("Removing Samshad delivery record with missing site:", docSnapshot.id);
+          if (isMissingSite) {
+            console.log("Removing delivery record with missing or invalid site:", docSnapshot.id);
             await deleteDoc(doc(db, "deliveries", docSnapshot.id));
           }
         }
@@ -85,16 +78,9 @@ export default function App() {
         const ereSnapshot = await getDocs(collection(db, "erections"));
         for (const docSnapshot of ereSnapshot.docs) {
           const data = docSnapshot.data();
-          const erectorName = data.erectionDetails?.erectorName || "";
-          const operatorName = data.erectionDetails?.operatorName || "";
-          const isSamshad = 
-            erectorName.toLowerCase().includes("samshad") || 
-            operatorName.toLowerCase().includes("samshad") ||
-            (data.recordedBy && data.recordedBy.toLowerCase().includes("samshad"));
-
           const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isSamshad && isMissingSite) {
-            console.log("Removing Samshad erection record with missing site:", docSnapshot.id);
+          if (isMissingSite) {
+            console.log("Removing erection record with missing or invalid site:", docSnapshot.id);
             await deleteDoc(doc(db, "erections", docSnapshot.id));
           }
         }
@@ -103,25 +89,19 @@ export default function App() {
         const eqSnapshot = await getDocs(collection(db, "equipment"));
         for (const docSnapshot of eqSnapshot.docs) {
           const data = docSnapshot.data();
-          const operatorName = data.operatorName || "";
-          const ownerName = data.ownerName || "";
-          const isSamshad = 
-            operatorName.toLowerCase().includes("samshad") || 
-            ownerName.toLowerCase().includes("samshad");
-
           const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isSamshad && isMissingSite) {
-            console.log("Removing Samshad equipment record with missing site:", docSnapshot.id);
+          if (isMissingSite) {
+            console.log("Removing equipment record with missing or invalid site:", docSnapshot.id);
             await deleteDoc(doc(db, "equipment", docSnapshot.id));
           }
         }
       } catch (err) {
-        console.error("Error executing Samshad cleanup:", err);
+        console.error("Error executing database cleanup sweep:", err);
       }
     };
 
     if (sites.length > 0) {
-      cleanUpSamshadOrphanEntries();
+      cleanUpOrphanEntries();
     }
   }, [sites]);
 

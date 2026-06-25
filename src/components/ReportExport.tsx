@@ -167,6 +167,17 @@ export default function ReportExport({
     };
   }, []);
 
+  // Filter allDeliveries and allErections to keep only valid active site records
+  const validAllDeliveries = useMemo(() => {
+    const activeSiteIds = new Set(allSites.map(s => s.id));
+    return allDeliveries.filter(d => d.siteId && activeSiteIds.has(d.siteId));
+  }, [allDeliveries, allSites]);
+
+  const validAllErections = useMemo(() => {
+    const activeSiteIds = new Set(allSites.map(s => s.id));
+    return allErections.filter(e => e.siteId && activeSiteIds.has(e.siteId));
+  }, [allErections, allSites]);
+
   // Get unique element types in deliveries and erections
   const uniqueElementTypes = useMemo(() => {
     const typesSet = new Set<string>();
@@ -220,7 +231,7 @@ export default function ReportExport({
       lastActive: string;
     }>();
 
-    allDeliveries.forEach((d) => {
+    validAllDeliveries.forEach((d) => {
       const u = d.unloadingDetails;
       if (u && u.unloaderName) {
         const foremanName = u.unloaderName.trim();
@@ -250,7 +261,7 @@ export default function ReportExport({
       }
     });
 
-    allErections.forEach((e) => {
+    validAllErections.forEach((e) => {
       const er = e.erectionDetails;
       if (er && er.erectorName) {
         const foremanName = er.erectorName.trim();
@@ -281,13 +292,13 @@ export default function ReportExport({
     });
 
     return Array.from(summaryMap.values());
-  }, [allDeliveries, allErections, allSites]);
+  }, [validAllDeliveries, validAllErections, allSites]);
 
   // Extract unique employees for advanced search
   const searchEmployees = useMemo(() => {
     const empMap = new Map<string, { name: string; id: string }>();
     
-    allDeliveries.forEach((d) => {
+    validAllDeliveries.forEach((d) => {
       const u = d.unloadingDetails;
       if (u && u.unloaderName) {
         const key = u.unloaderName.trim().toUpperCase();
@@ -295,7 +306,7 @@ export default function ReportExport({
       }
     });
 
-    allErections.forEach((e) => {
+    validAllErections.forEach((e) => {
       const er = e.erectionDetails;
       if (er && er.erectorName) {
         const key = er.erectorName.trim().toUpperCase();
@@ -304,7 +315,7 @@ export default function ReportExport({
     });
 
     return Array.from(empMap.values());
-  }, [allDeliveries, allErections]);
+  }, [validAllDeliveries, validAllErections]);
 
   // Map siteId to siteNo
   const siteMap = useMemo(() => {
@@ -318,35 +329,35 @@ export default function ReportExport({
   // Extract unique element codes/types for search dropdown
   const searchElements = useMemo(() => {
     const elSet = new Set<string>();
-    allDeliveries.forEach((d) => {
+    validAllDeliveries.forEach((d) => {
       if (d.elementCode) elSet.add(d.elementCode.trim());
       if (d.elementType) elSet.add(d.elementType.trim());
     });
-    allErections.forEach((e) => {
+    validAllErections.forEach((e) => {
       if (e.elementCode) elSet.add(e.elementCode.trim());
       if (e.elementType) elSet.add(e.elementType.trim());
     });
     return Array.from(elSet).sort((a, b) => a.localeCompare(b));
-  }, [allDeliveries, allErections]);
+  }, [validAllDeliveries, validAllErections]);
 
   // Extract unique dates for advanced search
   const searchDates = useMemo(() => {
     const datesSet = new Set<string>();
     
-    allDeliveries.forEach((d) => {
+    validAllDeliveries.forEach((d) => {
       if (d.createdAt) {
         datesSet.add(d.createdAt.split("T")[0]);
       }
     });
 
-    allErections.forEach((e) => {
+    validAllErections.forEach((e) => {
       if (e.createdAt) {
         datesSet.add(e.createdAt.split("T")[0]);
       }
     });
 
     return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
-  }, [allDeliveries, allErections]);
+  }, [validAllDeliveries, validAllErections]);
 
   // Advanced search results
   const searchResults = useMemo(() => {
@@ -365,7 +376,7 @@ export default function ReportExport({
     );
     const matchingSiteIds = new Set(matchingSites.map(s => s.id));
 
-    const filteredDeliveries = allDeliveries.filter((d) => {
+    const filteredDeliveries = validAllDeliveries.filter((d) => {
       const u = d.unloadingDetails;
       const matchesEmp = !normEmp || 
         (u?.unloaderName?.toLowerCase().includes(normEmp)) || 
@@ -386,7 +397,7 @@ export default function ReportExport({
       return matchesEmp && matchesSite && matchesDate && matchesElement;
     });
 
-    const filteredErections = allErections.filter((e) => {
+    const filteredErections = validAllErections.filter((e) => {
       const er = e.erectionDetails;
       const matchesEmp = !normEmp || 
         (er?.erectorName?.toLowerCase().includes(normEmp)) || 
@@ -420,7 +431,7 @@ export default function ReportExport({
       totalEreWeight,
       totalEreQty
     };
-  }, [allSites, allDeliveries, allErections, searchEmpId, searchSiteNo, searchDate, searchElementCode, searchTriggered]);
+  }, [allSites, validAllDeliveries, validAllErections, searchEmpId, searchSiteNo, searchDate, searchElementCode, searchTriggered]);
 
   // Determine date ranges
   const filteredData = useMemo(() => {
@@ -1213,11 +1224,11 @@ export default function ReportExport({
                     const foreman = foremanSummaries.find(f => `${f.name}_${f.siteNo}` === foremanKey);
                     if (!foreman) return null;
                     
-                    const delList = allDeliveries.filter(d => 
+                    const delList = validAllDeliveries.filter(d => 
                       d.unloadingDetails?.unloaderName?.trim().toUpperCase() === foreman.name.toUpperCase() &&
                       (d.siteId ? siteMap.get(d.siteId) : "N/A") === foreman.siteNo
                     );
-                    const ereList = allErections.filter(e => 
+                    const ereList = validAllErections.filter(e => 
                       e.erectionDetails?.erectorName?.trim().toUpperCase() === foreman.name.toUpperCase() &&
                       (e.siteId ? siteMap.get(e.siteId) : "N/A") === foreman.siteNo
                     );
@@ -1753,11 +1764,11 @@ export default function ReportExport({
           (() => {
             const foremanKey = `${printForemanName}_${printForemanSiteNo}`;
             const foreman = foremanSummaries.find(f => `${f.name}_${f.siteNo}` === foremanKey);
-            const delList = allDeliveries.filter(d => 
+            const delList = validAllDeliveries.filter(d => 
               d.unloadingDetails?.unloaderName?.trim().toUpperCase() === printForemanName.toUpperCase() &&
               (d.siteId ? siteMap.get(d.siteId) : "N/A") === printForemanSiteNo
             );
-            const ereList = allErections.filter(e => 
+            const ereList = validAllErections.filter(e => 
               e.erectionDetails?.erectorName?.trim().toUpperCase() === printForemanName.toUpperCase() &&
               (e.siteId ? siteMap.get(e.siteId) : "N/A") === printForemanSiteNo
             );
