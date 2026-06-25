@@ -1059,7 +1059,8 @@ export default function ReportExport({
   const repGoodDelQty = employeeFilteredData.deliveries.filter(d => d.status === "good").reduce((s, x) => s + (x.quantity || 1), 0);
 
   return (
-    <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-7xl mx-auto my-6 non-printable">
+    <>
+      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-7xl mx-auto my-6 non-printable">
       {errorNotice && (
         <div className="mb-4 p-3.5 text-xs text-rose-200 bg-rose-500/15 border border-rose-500/25 rounded-xl flex justify-between items-center animate-fade-in animate-scale-in">
           <span className="font-semibold">{errorNotice}</span>
@@ -1677,6 +1678,7 @@ export default function ReportExport({
           )}
         </div>
       )}
+      </div>
 
       {/* Hidden layout specifically customized for PRINTING */}
       <div className="hidden printing-template absolute top-0 left-0 w-full bg-white text-black p-8 font-sans">
@@ -2212,6 +2214,6 @@ export default function ReportExport({
           <div className="text-right">Receiver & Erector Digital Stamp Security Verified</div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
