@@ -695,15 +695,6 @@ export default function DeliveryForm({
             />
           </div>
 
-          <CustomCombobox
-            label="OPERATOR NAME"
-            value={operatorName}
-            onChange={setOperatorName}
-            suggestions={suggestions.operatorName || []}
-            placeholder="e.g. Suresh"
-            fieldName="operatorName"
-          />
-
           <div>
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
               OWNERSHIP
@@ -717,6 +708,15 @@ export default function DeliveryForm({
               <option value="rented" className="bg-slate-900">Rented</option>
             </select>
           </div>
+
+          <CustomCombobox
+            label="OPERATOR NAME"
+            value={operatorName}
+            onChange={setOperatorName}
+            suggestions={suggestions.operatorName || []}
+            placeholder="e.g. Suresh"
+            fieldName="operatorName"
+          />
         </div>
 
         {/* Sync/Register Crane Button */}

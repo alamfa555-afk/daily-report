@@ -74,9 +74,24 @@ export default function App() {
       setSites(loadedSites);
       setLoadingSites(false);
 
-      // Auto select the first site if none selected yet
-      if (loadedSites.length > 0 && !selectedSite) {
-        setSelectedSite(loadedSites[0]);
+      // Auto-select or sync selected site
+      if (loadedSites.length > 0) {
+        if (!selectedSite) {
+          setSelectedSite(loadedSites[0]);
+        } else {
+          const updatedSelectedSite = loadedSites.find(s => s.id === selectedSite.id);
+          if (updatedSelectedSite) {
+            // Keep selectedSite in sync with any edits
+            if (JSON.stringify(updatedSelectedSite) !== JSON.stringify(selectedSite)) {
+              setSelectedSite(updatedSelectedSite);
+            }
+          } else {
+            // Selected site was deleted, fallback to first available site
+            setSelectedSite(loadedSites[0]);
+          }
+        }
+      } else {
+        setSelectedSite(null);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, "sites");
