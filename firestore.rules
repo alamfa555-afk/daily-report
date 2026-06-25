@@ -13,5 +13,8 @@ service cloud.firestore {
     match /suggestions/{document} {
       allow read, write: if true;
     }
+    match /equipment/{document} {
+      allow read, write: if true;
+    }
   }
 }

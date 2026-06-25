@@ -99,6 +99,24 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "fieldName", "value", "createdAt"]
+    },
+    "Equipment": {
+      "title": "Equipment",
+      "description": "Tracks heavy mobile machinery and cranes assigned on different precast construction sites",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteId": { "type": "string" },
+        "siteNo": { "type": "string" },
+        "equipmentType": { "type": "string" },
+        "plateNo": { "type": "string" },
+        "capacity": { "type": "number" },
+        "status": { "type": "string", "enum": ["rented", "ARA"] },
+        "ownerName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "siteId", "siteNo", "equipmentType", "plateNo", "capacity", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -117,6 +135,10 @@
     "suggestions/{suggestionId}": {
       "schema": "Suggestion",
       "description": "Autocompleted selections stored from real system usage"
+    },
+    "equipment/{equipmentId}": {
+      "schema": "Equipment",
+      "description": "Tracks cranes and heavy equipments rented or ARA with plate numbers and capacities"
     }
   }
 }

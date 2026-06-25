@@ -191,10 +191,14 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           setSuccessMsg("⚡ Site logs are fully synchronized. No new crane records found.");
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Auto sync failed:", err);
+      const friendlyMessage = err?.message || String(err);
       if (!silent) {
-        setErrorMsg("Failed to synchronize crane records from logs.");
+        setErrorMsg(`Failed to synchronize crane records from logs: ${friendlyMessage}`);
+      } else {
+        // If it was a silent sync on load, also show the error details so we can debug permission/network issues
+        setErrorMsg(`Initial background sync failed: ${friendlyMessage}`);
       }
     } finally {
       if (!silent) setSyncing(false);
