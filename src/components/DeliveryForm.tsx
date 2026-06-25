@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Save, Sparkles, Send, CheckCircle2, AlertTriangle, X, Check } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, Sparkles, Send, CheckCircle2, AlertTriangle, X, Check, ShieldAlert } from "lucide-react";
 import { Site, Delivery, ElementStatus } from "../types";
 import { db, collection, doc, setDoc, handleFirestoreError, OperationType, query, where, getDocs, addDoc, updateDoc } from "../lib/firebase";
 import { saveSuggestion } from "../lib/suggestions";
@@ -896,6 +896,13 @@ export default function DeliveryForm({
       </div>
 
       {/* BLOCK 7: Action Buttons */}
+      {!selectedSite && (
+        <div className="p-3.5 text-xs text-amber-200 bg-amber-500/15 border border-amber-500/25 rounded-xl flex items-center gap-2 animate-fade-in mt-4">
+          <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+          <span className="font-semibold">⚠️ BINA SITE NO. KE KOI ENTRY NHI HOGI: Please select or register a construction project site above before saving.</span>
+        </div>
+      )}
+
       <div className="flex gap-3 pt-2.5 border-t border-slate-900">
         <button
           type="button"

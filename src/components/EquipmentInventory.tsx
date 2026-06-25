@@ -16,8 +16,11 @@ import {
   SlidersHorizontal,
   Download,
   FileSpreadsheet,
+  FileText,
   RefreshCw
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface EquipmentInventoryProps {
   sites: Site[];
@@ -387,6 +390,103 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     document.body.removeChild(link);
   };
 
+  // PDF Downloader for Crane Log
+  const handleDownloadPDF = () => {
+    if (filteredEquipment.length === 0) {
+      setErrorMsg("No equipment records to download.");
+      return;
+    }
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    const textDark = [15, 23, 42];
+
+    // Header Band
+    doc.setFillColor(241, 245, 249);
+    doc.rect(0, 0, 210, 32, "F");
+    doc.setFillColor(217, 119, 6); // Amber-600 color for heavy equipment / cranes
+    doc.rect(0, 0, 4, 32, "F");
+
+    // Header Text
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.text("ARA CRANE & EQUIPMENT DEPLOYMENT REPORT", 12, 12);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("AL RASHID ABETONG Precast Concrete Buildings Contractor", 12, 17);
+
+    // Active Site Pill (if filtered)
+    doc.setFillColor(254, 243, 199); // light amber
+    doc.setDrawColor(251, 191, 36); // border amber
+    doc.roundedRect(12, 21, 125, 7, 1, 1, "FD"); // rounded rect
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(146, 64, 14); // deep amber
+    doc.text(`Active Site Reference: Site No. ${searchSiteNo ? searchSiteNo : "ALL ACTIVE SITES"}`, 15, 25.5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(217, 119, 6);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 155, 12);
+
+    const tableRows: any[] = [];
+    filteredEquipment.forEach((eq, index) => {
+      const siteName = getSiteName(eq.siteId);
+      tableRows.push([
+        index + 1,
+        eq.siteNo,
+        siteName,
+        eq.equipmentType,
+        eq.plateNo,
+        `${eq.capacity} Tons`,
+        eq.status === "ARA" ? "Al Rashid Abetong (ARA)" : `Rented (${eq.ownerName || "N/A"})`,
+        new Date(eq.updatedAt).toLocaleDateString()
+      ]);
+    });
+
+    autoTable(doc, {
+      startY: 38,
+      head: [["S.No", "Site No", "Site Location / Name", "Equipment Type", "Plate No", "Capacity", "Status / Ownership", "Last Updated"]],
+      body: tableRows,
+      theme: "striped",
+      headStyles: {
+        fillColor: [217, 119, 6],
+        textColor: [255, 255, 255],
+        fontSize: 8.5,
+        fontStyle: "bold",
+        halign: "left"
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [51, 65, 85]
+      },
+      alternateRowStyles: {
+        fillColor: [254, 252, 243]
+      },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 15 },
+        2: { cellWidth: 45 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 40 },
+        7: { cellWidth: 20 }
+      },
+      margin: { left: 12, right: 12 }
+    });
+
+    doc.save(`ARA_Crane_Equipment_Report_Site_${searchSiteNo || "All"}.pdf`);
+  };
+
   return (
     <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-5 shadow-2xl text-slate-200">
       
@@ -459,6 +559,15 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
             Export CSV
+          </button>
+
+          <button
+            onClick={handleDownloadPDF}
+            disabled={filteredEquipment.length === 0}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none hover:scale-[1.01]"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Export PDF
           </button>
         </div>
       </div>
