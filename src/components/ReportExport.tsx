@@ -1744,20 +1744,20 @@ export default function ReportExport({
             <div className="grid grid-cols-4 gap-4 mb-6 text-xs text-center">
               <div className="border border-gray-200 rounded p-2.5">
                 <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Received</span>
-                <span className="text-base font-black text-blue-900">{repDelWeight.toFixed(2)} Tons</span>
-                <span className="block text-[9px] text-gray-400">({repDelQty} elements total)</span>
+                <span className="text-base font-black text-blue-900">{repDelQty} PCS</span>
+                <span className="block text-[9px] text-gray-400">({repDelWeight.toFixed(2)} Tons)</span>
               </div>
 
               <div className="border border-gray-200 rounded p-2.5">
                 <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Erected</span>
-                <span className="text-base font-black text-purple-900">{repEreWeight.toFixed(2)} Tons</span>
-                <span className="block text-[9px] text-gray-400">({repEreQty} elements total)</span>
+                <span className="text-base font-black text-purple-900">{repEreQty} PCS</span>
+                <span className="block text-[9px] text-gray-400">({repEreWeight.toFixed(2)} Tons)</span>
               </div>
 
               <div className="border border-gray-200 rounded p-2.5">
                 <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Awaiting Erection (Good Only)</span>
-                <span className="text-base font-black text-amber-700">{Math.max(0, repGoodDelWeight - repEreWeight).toFixed(2)} Tons</span>
-                <span className="block text-[9px] text-gray-400">({Math.max(0, repGoodDelQty - repEreQty)} elements)</span>
+                <span className="text-base font-black text-amber-700">{Math.max(0, repGoodDelQty - repEreQty)} PCS</span>
+                <span className="block text-[9px] text-gray-400">({Math.max(0, repGoodDelWeight - repEreWeight).toFixed(2)} Tons)</span>
               </div>
 
               <div className="border border-gray-200 rounded p-2.5">
@@ -1939,14 +1939,14 @@ export default function ReportExport({
                 <div className="grid grid-cols-2 gap-4 mb-6 text-xs text-center">
                   <div className="border border-gray-200 rounded p-2.5">
                     <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Unloaded/Received</span>
-                    <span className="text-base font-black text-blue-900">{foreman ? foreman.totalDelWeight.toFixed(2) : "0.00"} Tons</span>
-                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalDelQty : 0} elements)</span>
+                    <span className="text-base font-black text-blue-900">{foreman ? foreman.totalDelQty : 0} PCS</span>
+                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalDelWeight.toFixed(2) : "0.00"} Tons)</span>
                   </div>
 
                   <div className="border border-gray-200 rounded p-2.5">
                     <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Installed/Erected</span>
-                    <span className="text-base font-black text-purple-900">{foreman ? foreman.totalEreWeight.toFixed(2) : "0.00"} Tons</span>
-                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalEreQty : 0} elements)</span>
+                    <span className="text-base font-black text-purple-900">{foreman ? foreman.totalEreQty : 0} PCS</span>
+                    <span className="block text-[9px] text-gray-400">({foreman ? foreman.totalEreWeight.toFixed(2) : "0.00"} Tons)</span>
                   </div>
                 </div>
 
@@ -2106,14 +2106,14 @@ export default function ReportExport({
             <div className="grid grid-cols-2 gap-4 mb-6 text-xs text-center">
               <div className="border border-gray-200 rounded p-2.5">
                 <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Received</span>
-                <span className="text-base font-black text-blue-900">{searchResults.totalDelWeight.toFixed(2)} Tons</span>
-                <span className="block text-[9px] text-gray-400">({searchResults.totalDelQty} elements total)</span>
+                <span className="text-base font-black text-blue-900">{searchResults.totalDelQty} PCS</span>
+                <span className="block text-[9px] text-gray-400">({searchResults.totalDelWeight.toFixed(2)} Tons)</span>
               </div>
 
               <div className="border border-gray-200 rounded p-2.5">
                 <span className="block text-gray-500 uppercase font-bold text-[8px] tracking-wider mb-1">Total Precast Erected</span>
-                <span className="text-base font-black text-purple-900">{searchResults.totalEreWeight.toFixed(2)} Tons</span>
-                <span className="block text-[9px] text-gray-400">({searchResults.totalEreQty} elements total)</span>
+                <span className="text-base font-black text-purple-900">{searchResults.totalEreQty} PCS</span>
+                <span className="block text-[9px] text-gray-400">({searchResults.totalEreWeight.toFixed(2)} Tons)</span>
               </div>
             </div>
 
