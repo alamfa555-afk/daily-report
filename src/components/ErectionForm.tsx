@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, Loader2, Save, Sparkles, CheckCircle2, AlertTriangle, X, Check, ShieldAlert } from "lucide-react";
-import { Site, Erection, ElementStatus, Delivery } from "../types";
+import { Site, Erection, ElementStatus, Delivery, ALLOWED_EMPLOYEES } from "../types";
 import { db, collection, doc, setDoc, handleFirestoreError, OperationType, query, where, getDocs, addDoc, updateDoc } from "../lib/firebase";
 import { saveSuggestion } from "../lib/suggestions";
 import CustomCombobox from "./CustomCombobox";
@@ -112,11 +112,11 @@ export default function ErectionForm({
 
   // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
   useEffect(() => {
-    const cleanId = erectorId.trim().toUpperCase();
-    if (cleanId && employeeNameMap && employeeNameMap[cleanId]) {
-      setErectorName(employeeNameMap[cleanId]);
+    const cleanId = erectorId.trim();
+    if (cleanId && ALLOWED_EMPLOYEES[cleanId]) {
+      setErectorName(ALLOWED_EMPLOYEES[cleanId]);
     }
-  }, [erectorId, employeeNameMap]);
+  }, [erectorId]);
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -197,6 +197,18 @@ export default function ErectionForm({
     }
     if (!erectorId.trim() || !erectorName.trim()) {
       setErrorList("Employee ID and Employee Name are required.");
+      return;
+    }
+
+    // Strict Employee validation (Only 1001, 1002, 1003)
+    const cleanEmpId = erectorId.trim();
+    const cleanEmpName = erectorName.trim().toUpperCase();
+    if (!ALLOWED_EMPLOYEES[cleanEmpId]) {
+      setErrorList("Invalid Employee ID. Only 1001, 1002, 1003 are permitted.");
+      return;
+    }
+    if (ALLOWED_EMPLOYEES[cleanEmpId].toUpperCase() !== cleanEmpName) {
+      setErrorList(`Employee ID ${cleanEmpId} must exactly match Employee Name "${ALLOWED_EMPLOYEES[cleanEmpId]}".`);
       return;
     }
 
@@ -565,8 +577,8 @@ export default function ErectionForm({
             required
             value={erectorId}
             onChange={setErectorId}
-            suggestions={suggestions.erectorId || []}
-            placeholder="e.g. APC-001"
+            suggestions={Object.keys(ALLOWED_EMPLOYEES)}
+            placeholder="Search/Enter ID (1001, 1002, 1003)"
             fieldName="erectorId"
           />
 
@@ -575,7 +587,7 @@ export default function ErectionForm({
             required
             value={erectorName}
             onChange={setErectorName}
-            suggestions={suggestions.erectorName || []}
+            suggestions={Object.values(ALLOWED_EMPLOYEES)}
             placeholder="Type name..."
             fieldName="erectorName"
           />

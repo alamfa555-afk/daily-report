@@ -98,3 +98,10 @@ export interface Equipment {
   updatedAt: string;
 }
 
+export const ALLOWED_EMPLOYEES: Record<string, string> = {
+  "1001": "SAMSHAD ALAM",
+  "1002": "SURESH SINGH",
+  "1003": "RAMESH KUMAR"
+};
+
+
