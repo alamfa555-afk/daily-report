@@ -23,6 +23,7 @@ interface ErectionFormProps {
   onSuccess: () => void;
   lastErection: Erection | null;
   deliveries: Delivery[];
+  employeeNameMap: Record<string, string>;
 }
 
 export default function ErectionForm({
@@ -32,7 +33,8 @@ export default function ErectionForm({
   suggestions,
   onSuccess,
   lastErection,
-  deliveries = []
+  deliveries = [],
+  employeeNameMap
 }: ErectionFormProps) {
   const [loading, setLoading] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export default function ErectionForm({
   const [zone, setZone] = useState("");
   const [villaType, setVillaType] = useState("4BD");
   const [buildingNo, setBuildingNo] = useState("");
+  const [floorNo, setFloorNo] = useState("");
 
   // Equipment details
   const [equipmentType, setEquipmentType] = useState("");
@@ -92,6 +95,7 @@ export default function ErectionForm({
       setZone(lastErection.zone || "");
       setVillaType(lastErection.villaType || "4BD");
       setBuildingNo(lastErection.buildingNo || "");
+      setFloorNo(lastErection.floorNo || "");
       
       const eDetails = lastErection.erectionDetails;
       if (eDetails) {
@@ -105,6 +109,14 @@ export default function ErectionForm({
       }
     }
   }, [lastErection]);
+
+  // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
+  useEffect(() => {
+    const cleanId = erectorId.trim().toUpperCase();
+    if (cleanId && employeeNameMap && employeeNameMap[cleanId]) {
+      setErectorName(employeeNameMap[cleanId]);
+    }
+  }, [erectorId, employeeNameMap]);
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -241,6 +253,7 @@ export default function ErectionForm({
           zone: zone.trim(),
           villaType: villaType.trim(),
           buildingNo: buildingNo.trim(),
+          floorNo: floorNo.trim(),
           houseNo: "",
           flatNo: "",
           erectionDetails: {
@@ -311,6 +324,7 @@ export default function ErectionForm({
         saveSuggestion("zone", zone),
         saveSuggestion("villaType", villaType),
         saveSuggestion("buildingNo", buildingNo),
+        saveSuggestion("floorNo", floorNo),
         saveSuggestion("erectorId", erectorId),
         saveSuggestion("erectorName", erectorName),
         saveSuggestion("erectorTitle", foremanRole),
@@ -599,7 +613,7 @@ export default function ErectionForm({
 
       {/* BLOCK 3: Coordinates */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <CustomCombobox
             label="ZONE"
             value={zone}
@@ -625,6 +639,15 @@ export default function ErectionForm({
             suggestions={suggestions.buildingNo || []}
             placeholder="e.g. B-12"
             fieldName="buildingNo"
+          />
+
+          <CustomCombobox
+            label="FLOOR NO."
+            value={floorNo}
+            onChange={setFloorNo}
+            suggestions={suggestions.floorNo || []}
+            placeholder="e.g. Ground Floor"
+            fieldName="floorNo"
           />
         </div>
       </div>

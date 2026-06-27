@@ -29,6 +29,7 @@ export async function saveSuggestion(fieldName: string, value: string) {
 export const DEFAULT_SUGGESTIONS: Record<string, string[]> = {
   elementType: ["Column", "Beam", "Hollow Core Slab", "Wall Panel", "Foundation", "Staircase", "Boundary Wall", "Slab"],
   villaType: ["4BD", "3BD", "2BD", "6BD", "Penthouse", "Duplex", "Studio"],
+  floorNo: ["Ground Floor", "First Floor", "Second Floor", "Roof", "Basement", "Mezzanine"],
   equipmentType: ["Mobile Crane", "Crawler Crane", "Forklift", "Manlift", "Tower Crane", "Gantry Crane"],
   status: ["good", "damage", "reject"],
   zone: ["Zone A", "Zone B", "Zone C", "Zone D", "Main Area", "East Sector", "West Sector"]

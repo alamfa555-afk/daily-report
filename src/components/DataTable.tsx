@@ -217,7 +217,7 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                     <td className="px-4 py-4 text-slate-300">
                       {d.zone || "-"} / {d.villaType || "-"}
                       <div className="text-[10px] text-slate-500">
-                        {d.buildingNo ? `B: ${d.buildingNo}` : ""} {d.houseNo ? `H: ${d.houseNo}` : ""}
+                        {d.buildingNo ? `B: ${d.buildingNo}` : ""} {d.floorNo ? `F: ${d.floorNo}` : ""} {d.houseNo ? `H: ${d.houseNo}` : ""}
                       </div>
                     </td>
                     <td className="px-4 py-4 text-slate-300">
@@ -317,7 +317,7 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                     <td className="px-3 py-2 text-slate-300">
                       {e.zone || "-"} / {e.villaType || "-"}
                       <div className="text-[10px] text-slate-500">
-                        {e.buildingNo ? `B: ${e.buildingNo}` : ""} {e.houseNo ? `H: ${e.houseNo}` : ""}
+                        {e.buildingNo ? `B: ${e.buildingNo}` : ""} {e.floorNo ? `F: ${e.floorNo}` : ""} {e.houseNo ? `H: ${e.houseNo}` : ""}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-slate-300">
@@ -545,6 +545,19 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                     onChange={(e) => setEditingRecord({
                       ...editingRecord,
                       data: { ...editingRecord.data, buildingNo: e.target.value }
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Floor No</label>
+                  <input
+                    type="text"
+                    value={editingRecord.data.floorNo || ""}
+                    onChange={(e) => setEditingRecord({
+                      ...editingRecord,
+                      data: { ...editingRecord.data, floorNo: e.target.value }
                     })}
                     className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />

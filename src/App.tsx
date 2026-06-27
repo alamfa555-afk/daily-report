@@ -227,6 +227,10 @@ export default function App() {
         if (!combined.buildingNo) combined.buildingNo = new Set();
         combined.buildingNo.add(d.buildingNo);
       }
+      if (d.floorNo) {
+        if (!combined.floorNo) combined.floorNo = new Set();
+        combined.floorNo.add(d.floorNo);
+      }
       
       const u = d.unloadingDetails;
       if (u) {
@@ -285,6 +289,10 @@ export default function App() {
         if (!combined.buildingNo) combined.buildingNo = new Set();
         combined.buildingNo.add(e.buildingNo);
       }
+      if (e.floorNo) {
+        if (!combined.floorNo) combined.floorNo = new Set();
+        combined.floorNo.add(e.floorNo);
+      }
 
       const er = e.erectionDetails;
       if (er) {
@@ -329,6 +337,37 @@ export default function App() {
 
     return finalMap;
   }, [suggestionsMap, deliveries, erections]);
+
+  // Dynamic Employee ID -> Name map to enable instant auto-fill when matching ID is entered
+  const employeeNameMap = useMemo(() => {
+    const mapping: Record<string, string> = {};
+    
+    // Scan deliveries
+    deliveries.forEach(d => {
+      const u = d.unloadingDetails;
+      if (u && u.unloaderId && u.unloaderName) {
+        const id = u.unloaderId.trim().toUpperCase();
+        const name = u.unloaderName.trim();
+        if (id && name) {
+          mapping[id] = name;
+        }
+      }
+    });
+
+    // Scan erections
+    erections.forEach(e => {
+      const er = e.erectionDetails;
+      if (er && er.erectorId && er.erectorName) {
+        const id = er.erectorId.trim().toUpperCase();
+        const name = er.erectorName.trim();
+        if (id && name) {
+          mapping[id] = name;
+        }
+      }
+    });
+
+    return mapping;
+  }, [deliveries, erections]);
 
   // Compute the last entry of each to enable easy operator/equipment autofills
   const lastDelivery = useMemo(() => {
@@ -534,6 +573,7 @@ export default function App() {
                       onSelectSite={setSelectedSite}
                       suggestions={mergedSuggestionsMap}
                       lastDelivery={lastDelivery}
+                      employeeNameMap={employeeNameMap}
                       onSuccess={() => console.log("Received data logged successfully.")}
                     />
                   </div>
@@ -546,6 +586,7 @@ export default function App() {
                       suggestions={mergedSuggestionsMap}
                       lastErection={lastErection}
                       deliveries={deliveries}
+                      employeeNameMap={employeeNameMap}
                       onSuccess={() => console.log("Erection logged successfully")}
                     />
                   </div>

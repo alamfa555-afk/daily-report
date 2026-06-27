@@ -43,6 +43,7 @@ export interface Delivery {
   zone: string;
   villaType: string;
   buildingNo: string;
+  floorNo?: string;
   houseNo: string;
   flatNo: string;
   trailerNo?: string;
@@ -66,6 +67,7 @@ export interface Erection {
   zone: string;
   villaType: string;
   buildingNo: string;
+  floorNo?: string;
   houseNo: string;
   flatNo: string;
   erectionDetails: ErectionDetails;

@@ -22,6 +22,7 @@ interface DeliveryFormProps {
   suggestions: Record<string, string[]>;
   onSuccess: () => void;
   lastDelivery: Delivery | null;
+  employeeNameMap: Record<string, string>;
 }
 
 export default function DeliveryForm({
@@ -30,7 +31,8 @@ export default function DeliveryForm({
   onSelectSite,
   suggestions,
   onSuccess,
-  lastDelivery
+  lastDelivery,
+  employeeNameMap
 }: DeliveryFormProps) {
   const [loading, setLoading] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export default function DeliveryForm({
   const [zone, setZone] = useState("");
   const [villaType, setVillaType] = useState("4BD");
   const [buildingNo, setBuildingNo] = useState("");
+  const [floorNo, setFloorNo] = useState("");
 
   // Equipment details
   const [equipmentType, setEquipmentType] = useState("");
@@ -93,6 +96,7 @@ export default function DeliveryForm({
       setZone(lastDelivery.zone || "");
       setVillaType(lastDelivery.villaType || "4BD");
       setBuildingNo(lastDelivery.buildingNo || "");
+      setFloorNo(lastDelivery.floorNo || "");
       
       const u = lastDelivery.unloadingDetails;
       if (u) {
@@ -107,6 +111,14 @@ export default function DeliveryForm({
       }
     }
   }, [lastDelivery]);
+
+  // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
+  useEffect(() => {
+    const cleanId = unloaderId.trim().toUpperCase();
+    if (cleanId && employeeNameMap && employeeNameMap[cleanId]) {
+      setUnloaderName(employeeNameMap[cleanId]);
+    }
+  }, [unloaderId, employeeNameMap]);
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -242,6 +254,7 @@ export default function DeliveryForm({
           zone: zone.trim(),
           villaType: villaType.trim(),
           buildingNo: buildingNo.trim(),
+          floorNo: floorNo.trim(),
           houseNo: "",
           flatNo: "",
           unloadingDetails: {
@@ -314,6 +327,7 @@ export default function DeliveryForm({
         saveSuggestion("zone", zone),
         saveSuggestion("villaType", villaType),
         saveSuggestion("buildingNo", buildingNo),
+        saveSuggestion("floorNo", floorNo),
         saveSuggestion("unloaderId", unloaderId),
         saveSuggestion("unloaderName", unloaderName),
         saveSuggestion("unloaderTitle", foremanRole),
@@ -608,7 +622,7 @@ export default function DeliveryForm({
 
       {/* BLOCK 3: Transit details, Trailer and Coordinates */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-xl space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <CustomCombobox
             label="MDR Slip No."
             required
@@ -654,6 +668,15 @@ export default function DeliveryForm({
             suggestions={suggestions.buildingNo || []}
             placeholder="e.g. B-12"
             fieldName="buildingNo"
+          />
+
+          <CustomCombobox
+            label="FLOOR NO."
+            value={floorNo}
+            onChange={setFloorNo}
+            suggestions={suggestions.floorNo || []}
+            placeholder="e.g. Ground Floor"
+            fieldName="floorNo"
           />
         </div>
       </div>
