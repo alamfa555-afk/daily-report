@@ -213,12 +213,19 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     return () => unsubscribe();
   }, []);
 
-  // Scan previous site logs (Deliveries & Erections) and automatically sync new cranes/equipment records
+  // Run silent auto-sync on mount to make sure all cranes from Deliveries & Erections are registered & up-to-date
+  useEffect(() => {
+    if (sites.length > 0) {
+      handleAutoSyncCranes(true);
+    }
+  }, [sites]);
+
+  // Scan previous site logs (Deliveries & Erections) and automatically sync/update cranes/equipment records
   const handleAutoSyncCranes = async (silent: boolean = false) => {
     if (!silent) setSyncing(true);
     try {
-      // Get all existing registered plate numbers
-      const registeredPlates = new Set<string>();
+      // 1. Get all existing registered equipments as a Map by plate number
+      const existingEquipMap = new Map<string, { id: string; siteId: string; siteNo: string; capacity: number; equipmentType: string }>();
       let snapshot;
       try {
         const q = query(collection(db, "equipment"));
@@ -231,11 +238,17 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.plateNo) {
-          registeredPlates.add(data.plateNo.trim().toUpperCase());
+          existingEquipMap.set(data.plateNo.trim().toUpperCase(), {
+            id: doc.id,
+            siteId: data.siteId || "",
+            siteNo: data.siteNo || "",
+            capacity: Number(data.capacity) || 0,
+            equipmentType: data.equipmentType || ""
+          });
         }
       });
 
-      // Get deliveries and erections logs
+      // 2. Get deliveries and erections logs to build the map of latest logged cranes
       let delSnap;
       try {
         delSnap = await getDocs(collection(db, "deliveries"));
@@ -252,7 +265,16 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         throw new Error(`[Erections Collection] ${e.message || e}`);
       }
 
-      const newEquipmentFound: Omit<Equipment, "id">[] = [];
+      interface LoggedCrane {
+        siteId: string;
+        siteNo: string;
+        equipmentType: string;
+        plateNo: string;
+        capacity: number;
+        createdAt: string;
+      }
+
+      const latestCranesMap = new Map<string, LoggedCrane>();
 
       // Read from deliveries
       delSnap.forEach((doc) => {
@@ -260,29 +282,28 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         const unloading = data.unloadingDetails;
         if (unloading && unloading.equipmentPlateNo && unloading.equipmentPlateNo.trim()) {
           const plate = unloading.equipmentPlateNo.trim().toUpperCase();
-          if (!registeredPlates.has(plate)) {
-            registeredPlates.add(plate);
-            
-            // Map default equipment type matching or default to Mobile Crane
-            let rawType = unloading.equipmentType || "Mobile Crane";
-            let eqType = "Mobile Crane";
-            if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
-            else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
-            else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
-            else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
-            else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
-            else if (rawType.trim()) eqType = rawType.trim();
+          const siteObj = sites.find(s => s.id === data.siteId);
+          const actualSiteNo = siteObj ? siteObj.siteNo : (data.siteNo || "N/A");
+          
+          let rawType = unloading.equipmentType || "Mobile Crane";
+          let eqType = "Mobile Crane";
+          if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
+          else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
+          else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
+          else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
+          else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
+          else if (rawType.trim()) eqType = rawType.trim();
 
-            newEquipmentFound.push({
+          const currentLogDate = data.createdAt || new Date().toISOString();
+          const existing = latestCranesMap.get(plate);
+          if (!existing || currentLogDate > existing.createdAt) {
+            latestCranesMap.set(plate, {
               siteId: data.siteId || "",
-              siteNo: data.siteNo || "N/A",
+              siteNo: actualSiteNo,
               equipmentType: eqType,
               plateNo: plate,
               capacity: Number(unloading.capacity) || 25,
-              status: "ARA", // Default, user can change status and owner later
-              ownerName: "",
-              createdAt: data.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+              createdAt: currentLogDate
             });
           }
         }
@@ -294,44 +315,77 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         const erection = data.erectionDetails;
         if (erection && erection.equipmentPlateNo && erection.equipmentPlateNo.trim()) {
           const plate = erection.equipmentPlateNo.trim().toUpperCase();
-          if (!registeredPlates.has(plate)) {
-            registeredPlates.add(plate);
-            
-            let rawType = erection.equipmentType || "Mobile Crane";
-            let eqType = "Mobile Crane";
-            if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
-            else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
-            else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
-            else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
-            else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
-            else if (rawType.trim()) eqType = rawType.trim();
+          const siteObj = sites.find(s => s.id === data.siteId);
+          const actualSiteNo = siteObj ? siteObj.siteNo : (data.siteNo || "N/A");
+          
+          let rawType = erection.equipmentType || "Mobile Crane";
+          let eqType = "Mobile Crane";
+          if (rawType.toLowerCase().includes("crawler")) eqType = "Crawler Crane";
+          else if (rawType.toLowerCase().includes("forklift")) eqType = "Forklift";
+          else if (rawType.toLowerCase().includes("manlift")) eqType = "Manlift";
+          else if (rawType.toLowerCase().includes("tower")) eqType = "Tower Crane";
+          else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
+          else if (rawType.trim()) eqType = rawType.trim();
 
-            newEquipmentFound.push({
+          const currentLogDate = data.createdAt || new Date().toISOString();
+          const existing = latestCranesMap.get(plate);
+          if (!existing || currentLogDate > existing.createdAt) {
+            latestCranesMap.set(plate, {
               siteId: data.siteId || "",
-              siteNo: data.siteNo || "N/A",
+              siteNo: actualSiteNo,
               equipmentType: eqType,
               plateNo: plate,
               capacity: Number(erection.capacity) || 25,
-              status: "ARA",
-              ownerName: "",
-              createdAt: data.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+              createdAt: currentLogDate
             });
           }
         }
       });
 
-      if (newEquipmentFound.length > 0) {
-        // Log all of them
-        for (const item of newEquipmentFound) {
-          await addDoc(collection(db, "equipment"), item);
+      // 3. Process changes (Insert new ones, or update sites/info of existing ones)
+      let updateCount = 0;
+      let insertCount = 0;
+
+      for (const [plate, logged] of latestCranesMap.entries()) {
+        const existing = existingEquipMap.get(plate);
+        if (existing) {
+          // If the logged site, capacity or type is different, update the general directory to reflect the latest status
+          if (
+            existing.siteId !== logged.siteId || 
+            existing.capacity !== logged.capacity || 
+            existing.equipmentType !== logged.equipmentType
+          ) {
+            await updateDoc(doc(db, "equipment", existing.id), {
+              siteId: logged.siteId,
+              siteNo: logged.siteNo,
+              equipmentType: logged.equipmentType,
+              capacity: logged.capacity,
+              updatedAt: new Date().toISOString()
+            });
+            updateCount++;
+          }
+        } else {
+          // Add as a completely new equipment record
+          await addDoc(collection(db, "equipment"), {
+            siteId: logged.siteId,
+            siteNo: logged.siteNo,
+            equipmentType: logged.equipmentType,
+            plateNo: logged.plateNo,
+            capacity: logged.capacity,
+            status: "ARA",
+            ownerName: "",
+            createdAt: logged.createdAt,
+            updatedAt: new Date().toISOString()
+          });
+          insertCount++;
         }
-        if (!silent) {
-          setSuccessMsg(`⚡ Successfully fetched and synchronized ${newEquipmentFound.length} new crane/equipment records from site logs!`);
-        }
-      } else {
-        if (!silent) {
-          setSuccessMsg("⚡ Site logs are fully synchronized. No new crane records found.");
+      }
+
+      if (!silent) {
+        if (insertCount > 0 || updateCount > 0) {
+          setSuccessMsg(`⚡ Synchronized successfully: Registered ${insertCount} new cranes and updated ${updateCount} existing crane deployments!`);
+        } else {
+          setSuccessMsg("⚡ Site logs are fully synchronized. Zero new or shifted crane records found.");
         }
       }
     } catch (err: any) {
@@ -340,7 +394,6 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       if (!silent) {
         setErrorMsg(`Failed to synchronize crane records from logs: ${friendlyMessage}`);
       } else {
-        // If it was a silent sync on load, also show the error details so we can debug permission/network issues
         setErrorMsg(`Initial background sync failed: ${friendlyMessage}`);
       }
     } finally {
@@ -357,10 +410,12 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
   // Filtered equipment by Site Number (case insensitive search)
   const filteredEquipment = useMemo(() => {
     if (!searchSiteNo.trim()) return equipmentList;
-    return equipmentList.filter((eq) =>
-      eq.siteNo.toLowerCase().includes(searchSiteNo.trim().toLowerCase())
-    );
-  }, [equipmentList, searchSiteNo]);
+    return equipmentList.filter((eq) => {
+      const site = sites.find((s) => s.id === eq.siteId);
+      const actualSiteNo = site ? site.siteNo : eq.siteNo;
+      return actualSiteNo.toLowerCase().includes(searchSiteNo.trim().toLowerCase());
+    });
+  }, [equipmentList, searchSiteNo, sites]);
 
   // Find site detail helper
   const getSiteName = (siteId: string) => {
@@ -488,8 +543,9 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     let csvContent = "Site No,Site Name,Equipment Type,Plate No,Capacity (Tons),Status,Last Updated\n";
     filteredEquipment.forEach((eq) => {
       const siteName = getSiteName(eq.siteId);
+      const siteNoVal = getSiteNo(eq.siteId);
       const row = [
-        `"${eq.siteNo}"`,
+        `"${siteNoVal}"`,
         `"${siteName}"`,
         `"${eq.equipmentType}"`,
         `"${eq.plateNo}"`,
@@ -584,9 +640,10 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     const tableRows: any[] = [];
     filteredEquipment.forEach((eq, index) => {
       const siteName = getSiteName(eq.siteId);
+      const siteNoVal = getSiteNo(eq.siteId);
       tableRows.push([
         index + 1,
-        eq.siteNo,
+        siteNoVal,
         siteName,
         eq.equipmentType,
         eq.plateNo,
@@ -960,7 +1017,7 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
                     return (
                       <tr key={eq.id} className="hover:bg-slate-900/20 transition-all">
                         <td className="p-3 px-4 font-bold text-blue-400">
-                          Site {eq.siteNo}
+                          Site {getSiteNo(eq.siteId)}
                         </td>
                         <td className="p-3 text-slate-300 font-sans font-medium max-w-[200px] truncate" title={siteName}>
                           {siteName}
