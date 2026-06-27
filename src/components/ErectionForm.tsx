@@ -266,7 +266,7 @@ export default function ErectionForm({
         return;
       }
       if (!item.elementCode.trim()) {
-        setErrorList(`Please provide a unique Product Code for ${itemIndexLabel}.`);
+        setErrorList(`Please provide a Product Code for ${itemIndexLabel}.`);
         return;
       }
 
