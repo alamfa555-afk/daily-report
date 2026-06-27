@@ -156,51 +156,85 @@ export default function App() {
     };
   }, [selectedSite]);
 
-  // Clean up any duplicate/conflicting erection records (e.g. 1003 = SHAMIM, 1003 = JAMSHED, 1004 = RAMESH) in Firestore automatically
+  // Clean up any duplicate/conflicting records (e.g. 1003 = SHAMIM, 1003 = JAMSHED, 1004 = RAMESH) in Firestore automatically
   useEffect(() => {
-    if (erections.length === 0) return;
-
     const autoCleanDuplicates = async () => {
-      const duplicateErections = erections.filter(e => {
-        const er = e.erectionDetails;
-        if (!er || !er.erectorId) return false;
-        const id = er.erectorId.trim().toUpperCase();
-        const name = (er.erectorName || "").trim().toUpperCase();
+      let count = 0;
 
-        // 1003 = SHAMIM or 1003 = JAMSHED
-        if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) {
-          return true;
-        }
-        // 1004 = RAMESH
-        if (id === "1004" && name === "RAMESH") {
-          return true;
-        }
-        return false;
-      });
+      // 1. Clean Erections
+      if (erections.length > 0) {
+        const duplicateErections = erections.filter(e => {
+          const er = e.erectionDetails;
+          if (!er || !er.erectorId) return false;
+          const id = er.erectorId.trim().toUpperCase();
+          const name = (er.erectorName || "").trim().toUpperCase();
 
-      if (duplicateErections.length > 0) {
-        setIsCleaning(true);
-        setCleaningStatus("Found duplicate erection records in Firestore. Auto-removing them now...");
-        let count = 0;
-        for (const e of duplicateErections) {
-          try {
-            await deleteDoc(doc(db, "erections", e.id));
-            count++;
-          } catch (err) {
-            console.error(`Error deleting duplicate erection ${e.id}:`, err);
+          // 1003 = SHAMIM or 1003 = JAMSHED
+          if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) {
+            return true;
+          }
+          // 1004 = RAMESH or RAMESH KUMAR
+          if (id === "1004" && name.includes("RAMESH")) {
+            return true;
+          }
+          return false;
+        });
+
+        if (duplicateErections.length > 0) {
+          setIsCleaning(true);
+          for (const e of duplicateErections) {
+            try {
+              await deleteDoc(doc(db, "erections", e.id));
+              count++;
+            } catch (err) {
+              console.error(`Error deleting duplicate erection ${e.id}:`, err);
+            }
           }
         }
-        if (count > 0) {
-          setCleanedCount(prev => prev + count);
-          setCleaningStatus(`Removed ${count} conflicting erection records successfully!`);
-          setTimeout(() => setCleaningStatus(""), 6000);
+      }
+
+      // 2. Clean Deliveries
+      if (deliveries.length > 0) {
+        const duplicateDeliveries = deliveries.filter(d => {
+          const u = d.unloadingDetails;
+          if (!u || !u.unloaderId) return false;
+          const id = u.unloaderId.trim().toUpperCase();
+          const name = (u.unloaderName || "").trim().toUpperCase();
+
+          // 1003 = SHAMIM or 1003 = JAMSHED
+          if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) {
+            return true;
+          }
+          // 1004 = RAMESH or RAMESH KUMAR
+          if (id === "1004" && name.includes("RAMESH")) {
+            return true;
+          }
+          return false;
+        });
+
+        if (duplicateDeliveries.length > 0) {
+          setIsCleaning(true);
+          for (const d of duplicateDeliveries) {
+            try {
+              await deleteDoc(doc(db, "deliveries", d.id));
+              count++;
+            } catch (err) {
+              console.error(`Error deleting duplicate delivery ${d.id}:`, err);
+            }
+          }
         }
+      }
+
+      if (count > 0) {
+        setCleanedCount(prev => prev + count);
+        setCleaningStatus(`Automatically removed ${count} duplicate 1004 = RAMESH / conflicting records!`);
+        setTimeout(() => setCleaningStatus(""), 8000);
         setIsCleaning(false);
       }
     };
 
     autoCleanDuplicates();
-  }, [erections]);
+  }, [erections, deliveries]);
 
   // 3. Listen for suggestions in real-time to build the autocompleting dropdowns
   useEffect(() => {
@@ -755,36 +789,59 @@ export default function App() {
                     disabled={isCleaning}
                     onClick={async () => {
                       setIsCleaning(true);
-                      setCleaningStatus("Scanning for any duplicate Erection records...");
-                      const toClean = erections.filter(e => {
+                      setCleaningStatus("Scanning for duplicate or conflicting records in both forms...");
+                      let count = 0;
+
+                      // 1. Clean Erections
+                      const toCleanErections = erections.filter(e => {
                         const er = e.erectionDetails;
                         if (!er || !er.erectorId) return false;
                         const id = er.erectorId.trim().toUpperCase();
                         const name = (er.erectorName || "").trim().toUpperCase();
                         if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) return true;
-                        if (id === "1004" && name === "RAMESH") return true;
+                        if (id === "1004" && name.includes("RAMESH")) return true;
                         return false;
                       });
 
-                      if (toClean.length > 0) {
-                        let count = 0;
-                        for (const e of toClean) {
-                          try {
-                            await deleteDoc(doc(db, "erections", e.id));
-                            count++;
-                          } catch (err) {
-                            console.error(err);
-                          }
+                      for (const e of toCleanErections) {
+                        try {
+                          await deleteDoc(doc(db, "erections", e.id));
+                          count++;
+                        } catch (err) {
+                          console.error(err);
                         }
+                      }
+
+                      // 2. Clean Deliveries
+                      const toCleanDeliveries = deliveries.filter(d => {
+                        const u = d.unloadingDetails;
+                        if (!u || !u.unloaderId) return false;
+                        const id = u.unloaderId.trim().toUpperCase();
+                        const name = (u.unloaderName || "").trim().toUpperCase();
+                        if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) return true;
+                        if (id === "1004" && name.includes("RAMESH")) return true;
+                        return false;
+                      });
+
+                      for (const d of toCleanDeliveries) {
+                        try {
+                          await deleteDoc(doc(db, "deliveries", d.id));
+                          count++;
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }
+
+                      if (count > 0) {
                         setCleanedCount(prev => prev + count);
-                        setCleaningStatus(`Successfully scanned & removed ${count} duplicate erections!`);
+                        setCleaningStatus(`Scan complete! Successfully deleted ${count} duplicate/conflicting records.`);
                       } else {
-                        setCleaningStatus("Scanning complete. Zero duplicates found!");
+                        setCleaningStatus("Scan complete. Zero duplicates found in either collection!");
                       }
                       setTimeout(() => {
                         setCleaningStatus("");
                         setIsCleaning(false);
-                      }, 4000);
+                      }, 5000);
                     }}
                     className="w-full py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-900/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
