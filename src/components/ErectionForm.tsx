@@ -133,9 +133,24 @@ export default function ErectionForm({
   useEffect(() => {
     const cleanId = erectorId.trim().toUpperCase();
     if (cleanId && knownEmployees[cleanId]) {
-      setErectorName(knownEmployees[cleanId]);
+      if (erectorName !== knownEmployees[cleanId]) {
+        setErectorName(knownEmployees[cleanId]);
+      }
     }
   }, [erectorId, knownEmployees]);
+
+  // Auto fill Employee ID when Employee Name is typed or chosen from suggestions
+  useEffect(() => {
+    const cleanName = erectorName.trim().toUpperCase();
+    if (cleanName) {
+      const foundId = Object.keys(knownEmployees).find(
+        id => knownEmployees[id].toUpperCase() === cleanName
+      );
+      if (foundId && erectorId !== foundId) {
+        setErectorId(foundId);
+      }
+    }
+  }, [erectorName, knownEmployees]);
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -219,17 +234,28 @@ export default function ErectionForm({
       return;
     }
 
-    // Flexible Employee validation:
-    // If Employee ID exists in knownEmployees, its name must match exactly.
-    // If it doesn't exist, allow it as a new entry.
+    // Strict 1-to-1 Employee validation:
+    // 1. If Employee ID exists in knownEmployees, its name must match exactly.
+    // 2. If Employee Name is already mapped to another ID, prevent assigning it to a new ID.
     const cleanEmpId = erectorId.trim().toUpperCase();
     const cleanEmpName = erectorName.trim().toUpperCase();
+
+    // ID-to-Name match check
     if (knownEmployees[cleanEmpId]) {
       const expectedName = knownEmployees[cleanEmpId].toUpperCase();
       if (expectedName !== cleanEmpName) {
-        setErrorList(`Employee ID ${erectorId.trim()} must exactly match Employee Name "${knownEmployees[cleanEmpId]}".`);
+        setErrorList(`Employee ID "${erectorId.trim()}" must exactly match Employee Name "${knownEmployees[cleanEmpId]}".`);
         return;
       }
+    }
+
+    // Name-to-ID match check
+    const existingIdForName = Object.keys(knownEmployees).find(
+      idKey => knownEmployees[idKey].toUpperCase() === cleanEmpName
+    );
+    if (existingIdForName && existingIdForName !== cleanEmpId) {
+      setErrorList(`Employee Name "${erectorName.trim()}" is already assigned to Employee ID "${existingIdForName}". Each employee must have a single unique ID.`);
+      return;
     }
 
     // Validate all entered items inside list

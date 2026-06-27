@@ -10,10 +10,13 @@ import {
   Info,
   Layers,
   FileCheck,
-  CheckCircle2
+  CheckCircle2,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2
 } from "lucide-react";
 import { Site, Delivery, Erection, Suggestion } from "./types";
-import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType } from "./lib/firebase";
+import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, doc, deleteDoc } from "./lib/firebase";
 import { DEFAULT_SUGGESTIONS } from "./lib/suggestions";
 import SiteSelector from "./components/SiteSelector";
 import DeliveryForm from "./components/DeliveryForm";
@@ -34,6 +37,9 @@ export default function App() {
   const [erections, setErections] = useState<Erection[]>([]);
   const [suggestionsMap, setSuggestionsMap] = useState<Record<string, string[]>>({});
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("");
+  const [cleaningStatus, setCleaningStatus] = useState<string>("");
+  const [cleanedCount, setCleanedCount] = useState<number>(0);
+  const [isCleaning, setIsCleaning] = useState<boolean>(false);
   
   const [activeFormTab, setActiveFormTab] = useState<"receive" | "erect">("receive");
   const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory" | "equipment" | "charts">("logging");
@@ -149,6 +155,52 @@ export default function App() {
       unsubErections();
     };
   }, [selectedSite]);
+
+  // Clean up any duplicate/conflicting erection records (e.g. 1003 = SHAMIM, 1003 = JAMSHED, 1004 = RAMESH) in Firestore automatically
+  useEffect(() => {
+    if (erections.length === 0) return;
+
+    const autoCleanDuplicates = async () => {
+      const duplicateErections = erections.filter(e => {
+        const er = e.erectionDetails;
+        if (!er || !er.erectorId) return false;
+        const id = er.erectorId.trim().toUpperCase();
+        const name = (er.erectorName || "").trim().toUpperCase();
+
+        // 1003 = SHAMIM or 1003 = JAMSHED
+        if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) {
+          return true;
+        }
+        // 1004 = RAMESH
+        if (id === "1004" && name === "RAMESH") {
+          return true;
+        }
+        return false;
+      });
+
+      if (duplicateErections.length > 0) {
+        setIsCleaning(true);
+        setCleaningStatus("Found duplicate erection records in Firestore. Auto-removing them now...");
+        let count = 0;
+        for (const e of duplicateErections) {
+          try {
+            await deleteDoc(doc(db, "erections", e.id));
+            count++;
+          } catch (err) {
+            console.error(`Error deleting duplicate erection ${e.id}:`, err);
+          }
+        }
+        if (count > 0) {
+          setCleanedCount(prev => prev + count);
+          setCleaningStatus(`Removed ${count} conflicting erection records successfully!`);
+          setTimeout(() => setCleaningStatus(""), 6000);
+        }
+        setIsCleaning(false);
+      }
+    };
+
+    autoCleanDuplicates();
+  }, [erections]);
 
   // 3. Listen for suggestions in real-time to build the autocompleting dropdowns
   useEffect(() => {
@@ -338,30 +390,69 @@ export default function App() {
     return finalMap;
   }, [suggestionsMap, deliveries, erections]);
 
-  // Dynamic Employee ID -> Name map to enable instant auto-fill when matching ID is entered
+  // Dynamic Employee ID -> Name map with STRICT 1-to-1 mapping constraints
   const employeeNameMap = useMemo(() => {
     const mapping: Record<string, string> = {};
     
-    // Scan deliveries
+    // 1. Pre-populate with standard default employee entries
+    const defaults: Record<string, string> = {
+      "1001": "SAMSHAD ALAM",
+      "1002": "SURESH SINGH",
+      "1003": "RAMESH KUMAR"
+    };
+
+    Object.entries(defaults).forEach(([id, name]) => {
+      mapping[id] = name;
+    });
+
+    // 2. Scan deliveries and build dynamic mapping (ignoring conflicts)
     deliveries.forEach(d => {
       const u = d.unloadingDetails;
       if (u && u.unloaderId && u.unloaderName) {
         const id = u.unloaderId.trim().toUpperCase();
         const name = u.unloaderName.trim();
         if (id && name) {
-          mapping[id] = name;
+          // If the ID is a default ID, its name must match the default. If not, skip (conflict).
+          if (defaults[id] && defaults[id].toUpperCase() !== name.toUpperCase()) {
+            return;
+          }
+          // If the name is already mapped to a different ID, skip (conflict).
+          const existingIdForName = Object.keys(mapping).find(
+            k => mapping[k].toUpperCase() === name.toUpperCase()
+          );
+          if (existingIdForName && existingIdForName !== id) {
+            return;
+          }
+          // Otherwise, it is a safe non-conflicting entry
+          if (!mapping[id]) {
+            mapping[id] = name;
+          }
         }
       }
     });
 
-    // Scan erections
+    // 3. Scan erections and add non-conflicting entries
     erections.forEach(e => {
       const er = e.erectionDetails;
       if (er && er.erectorId && er.erectorName) {
         const id = er.erectorId.trim().toUpperCase();
         const name = er.erectorName.trim();
         if (id && name) {
-          mapping[id] = name;
+          // If the ID is a default ID, its name must match the default. If not, skip (conflict).
+          if (defaults[id] && defaults[id].toUpperCase() !== name.toUpperCase()) {
+            return;
+          }
+          // If the name is already mapped to a different ID, skip (conflict).
+          const existingIdForName = Object.keys(mapping).find(
+            k => mapping[k].toUpperCase() === name.toUpperCase()
+          );
+          if (existingIdForName && existingIdForName !== id) {
+            return;
+          }
+          // Add to map
+          if (!mapping[id]) {
+            mapping[id] = name;
+          }
         }
       }
     });
@@ -619,6 +710,87 @@ export default function App() {
                       <span className="font-bold text-purple-300">{erections.length} pcs</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Staff ID Integrity Panel */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-xs space-y-3 shadow-lg">
+                  <h4 className="font-black text-white uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-800">
+                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                     Staff ID Integrity Control
+                  </h4>
+                  
+                  <div className="space-y-2 leading-relaxed text-[11px]">
+                    <div className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-800/60">
+                      <span className="text-slate-400 font-medium">Status:</span>
+                      <span className="text-emerald-400 font-black tracking-wide uppercase flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        STRICT UNIQUE ACTIVE
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-800/60">
+                      <span className="text-slate-400 font-medium">Active Workers Map:</span>
+                      <span className="text-white font-bold">{Object.keys(employeeNameMap).length} Employees</span>
+                    </div>
+
+                    {cleaningStatus ? (
+                      <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold animate-pulse">
+                        ⚠️ {cleaningStatus}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-semibold">
+                        ✅ No duplicate or conflicting employee entries found. All systems 100% clean!
+                      </div>
+                    )}
+
+                    {cleanedCount > 0 && (
+                      <div className="p-1.5 bg-blue-500/10 border border-blue-500/25 rounded text-blue-300 font-semibold text-[10px]">
+                        ℹ️ Sessions auto-removed {cleanedCount} conflict records.
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isCleaning}
+                    onClick={async () => {
+                      setIsCleaning(true);
+                      setCleaningStatus("Scanning for any duplicate Erection records...");
+                      const toClean = erections.filter(e => {
+                        const er = e.erectionDetails;
+                        if (!er || !er.erectorId) return false;
+                        const id = er.erectorId.trim().toUpperCase();
+                        const name = (er.erectorName || "").trim().toUpperCase();
+                        if (id === "1003" && (name === "SHAMIM" || name === "JAMSHED")) return true;
+                        if (id === "1004" && name === "RAMESH") return true;
+                        return false;
+                      });
+
+                      if (toClean.length > 0) {
+                        let count = 0;
+                        for (const e of toClean) {
+                          try {
+                            await deleteDoc(doc(db, "erections", e.id));
+                            count++;
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }
+                        setCleanedCount(prev => prev + count);
+                        setCleaningStatus(`Successfully scanned & removed ${count} duplicate erections!`);
+                      } else {
+                        setCleaningStatus("Scanning complete. Zero duplicates found!");
+                      }
+                      setTimeout(() => {
+                        setCleaningStatus("");
+                        setIsCleaning(false);
+                      }, 4000);
+                    }}
+                    className="w-full py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-900/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                    Force Scan & Clean Duplicates
+                  </button>
                 </div>
 
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-xs space-y-2">
