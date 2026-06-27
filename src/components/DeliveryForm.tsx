@@ -291,6 +291,64 @@ export default function DeliveryForm({
 
     setLoading(true);
 
+    // Validate that the same crane plate number is not deployed on a different site on the same date!
+    if (equipmentPlateNo.trim() && selectedSite) {
+      const plate = equipmentPlateNo.trim().toUpperCase();
+      const selectedDateStr = date; // "YYYY-MM-DD"
+      
+      try {
+        // 1. Check deliveries
+        const delQuery = query(
+          collection(db, "deliveries"),
+          where("unloadingDetails.equipmentPlateNo", "==", plate)
+        );
+        const delSnap = await getDocs(delQuery);
+        for (const docSnap of delSnap.docs) {
+          const dData = docSnap.data();
+          const dDate = dData.createdAt ? dData.createdAt.split("T")[0] : "";
+          if (dDate === selectedDateStr && dData.siteId !== selectedSite.id) {
+            const otherSite = sites.find(s => s.id === dData.siteId);
+            const otherSiteLabel = otherSite 
+              ? `Site ${otherSite.siteNo} (${otherSite.name})`
+              : `another project site (ID: ${dData.siteId})`;
+            setErrorList(
+              `⚠️ CRANE RESTRICTION ACTIVE:\n` +
+              `Crane "${plate}" is already deployed on "${otherSiteLabel}" on date ${selectedDateStr}. A crane cannot work on two different sites on the exact same date!\n\n` +
+              `प्रतिबंध सक्रिय: क्रेन "${plate}" पहले से ही इस तारीख (${selectedDateStr}) को "${otherSiteLabel}" पर तैनात है। एक ही क्रेन एक ही तारीख में दो अलग-अलग साइटों पर काम नहीं कर सकती!`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+
+        // 2. Check erections
+        const ereQuery = query(
+          collection(db, "erections"),
+          where("erectionDetails.equipmentPlateNo", "==", plate)
+        );
+        const ereSnap = await getDocs(ereQuery);
+        for (const docSnap of ereSnap.docs) {
+          const eData = docSnap.data();
+          const eDate = eData.createdAt ? eData.createdAt.split("T")[0] : "";
+          if (eDate === selectedDateStr && eData.siteId !== selectedSite.id) {
+            const otherSite = sites.find(s => s.id === eData.siteId);
+            const otherSiteLabel = otherSite 
+              ? `Site ${otherSite.siteNo} (${otherSite.name})`
+              : `another project site (ID: ${eData.siteId})`;
+            setErrorList(
+              `⚠️ CRANE RESTRICTION ACTIVE:\n` +
+              `Crane "${plate}" is already deployed on "${otherSiteLabel}" on date ${selectedDateStr}. A crane cannot work on two different sites on the exact same date!\n\n` +
+              `प्रतिबंध सक्रिय: क्रेन "${plate}" पहले से ही इस तारीख (${selectedDateStr}) को "${otherSiteLabel}" पर तैनात है। एक ही क्रेन एक ही तारीख में दो अलग-अलग साइटों पर काम नहीं कर सकती!`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Error validating crane date restriction:", err);
+      }
+    }
+
     try {
       // Loop over items and register each inside Firestore deliveries collection
       for (const item of items) {
@@ -322,7 +380,8 @@ export default function DeliveryForm({
             capacity: Number(capacity) || 0,
             equipmentPlateNo: equipmentPlateNo.trim().toUpperCase(),
             operatorName: operatorName.trim(),
-            operatorId: operatorId.trim()
+            operatorId: operatorId.trim(),
+            equipmentStatus: equipmentStatus
           },
           remarks: remarks.trim(),
           recordedBy: unloaderName.trim() || "Site Receiver",
@@ -515,7 +574,7 @@ export default function DeliveryForm({
       {errorList && (
         <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-200 text-xs font-bold flex items-center gap-2.5 animate-fade-in shadow-lg">
           <AlertTriangle className="h-4.5 w-4.5 text-rose-400 shrink-0 animate-bounce" />
-          <span>{errorList}</span>
+          <span className="whitespace-pre-line">{errorList}</span>
         </div>
       )}
       {successList && (

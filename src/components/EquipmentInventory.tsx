@@ -178,10 +178,39 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
   const [formStatus, setFormStatus] = useState<"rented" | "ARA">("ARA");
   const [formOwnerName, setFormOwnerName] = useState<string>("");
 
+  // Developer Diagnostics State
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [diagDeliveries, setDiagDeliveries] = useState<any[]>([]);
+  const [diagErections, setDiagErections] = useState<any[]>([]);
+  const [diagLoading, setDiagLoading] = useState<boolean>(false);
+
+  const loadDiagnostics = async () => {
+    setDiagLoading(true);
+    try {
+      const delSnap = await getDocs(collection(db, "deliveries"));
+      const loadedDels: any[] = [];
+      delSnap.forEach((doc) => {
+        loadedDels.push({ id: doc.id, ...doc.data() });
+      });
+      setDiagDeliveries(loadedDels);
+
+      const ereSnap = await getDocs(collection(db, "erections"));
+      const loadedEres: any[] = [];
+      ereSnap.forEach((doc) => {
+        loadedEres.push({ id: doc.id, ...doc.data() });
+      });
+      setDiagErections(loadedEres);
+    } catch (err: any) {
+      console.error("Failed to load diagnostics:", err);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
   // Sync search state with the current selected site from App
   useEffect(() => {
     if (currentSite) {
-      setSearchSiteNo(currentSite.siteNo);
+      setSearchSiteNo(String(currentSite.siteNo || ""));
       setFormSiteId(currentSite.id);
     }
   }, [currentSite]);
@@ -213,19 +242,65 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     return () => unsubscribe();
   }, []);
 
-  // Run silent auto-sync on mount to make sure all cranes from Deliveries & Erections are registered & up-to-date
+  // Listen in real-time to deliveries and erections and auto-sync cranes
   useEffect(() => {
-    if (sites.length > 0) {
-      handleAutoSyncCranes(true);
-    }
+    if (sites.length === 0) return;
+
+    let isSyncingBackground = false;
+    const runBackgroundSync = async () => {
+      if (isSyncingBackground) return;
+      isSyncingBackground = true;
+      try {
+        await handleAutoSyncCranes(true);
+      } catch (e) {
+        console.error("Background auto sync failed:", e);
+      } finally {
+        isSyncingBackground = false;
+      }
+    };
+
+    // Listen to changes in both collections to auto-sync in real-time!
+    const unsubDels = onSnapshot(collection(db, "deliveries"), () => {
+      runBackgroundSync();
+    });
+
+    const unsubEres = onSnapshot(collection(db, "erections"), () => {
+      runBackgroundSync();
+    });
+
+    return () => {
+      unsubDels();
+      unsubEres();
+    };
   }, [sites]);
+
+  // Helper helper to convert any Firestore date/timestamp/string format reliably
+  const parseToIsoString = (val: any): string => {
+    if (!val) return "1970-01-01T00:00:00.000Z";
+    if (typeof val === "string") return val;
+    if (typeof val.toDate === "function") {
+      try {
+        return val.toDate().toISOString();
+      } catch (e) {}
+    }
+    if (val.seconds) {
+      try {
+        return new Date(val.seconds * 1000).toISOString();
+      } catch (e) {}
+    }
+    try {
+      return new Date(val).toISOString();
+    } catch (e) {
+      return "1970-01-01T00:00:00.000Z";
+    }
+  };
 
   // Scan previous site logs (Deliveries & Erections) and automatically sync/update cranes/equipment records
   const handleAutoSyncCranes = async (silent: boolean = false) => {
     if (!silent) setSyncing(true);
     try {
       // 1. Get all existing registered equipments as a Map by plate number
-      const existingEquipMap = new Map<string, { id: string; siteId: string; siteNo: string; capacity: number; equipmentType: string }>();
+      const existingEquipMap = new Map<string, { id: string; siteId: string; siteNo: string; capacity: number; equipmentType: string; status: string; ownerName: string }>();
       let snapshot;
       try {
         const q = query(collection(db, "equipment"));
@@ -241,9 +316,11 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           existingEquipMap.set(data.plateNo.trim().toUpperCase(), {
             id: doc.id,
             siteId: data.siteId || "",
-            siteNo: data.siteNo || "",
+            siteNo: String(data.siteNo || ""),
             capacity: Number(data.capacity) || 0,
-            equipmentType: data.equipmentType || ""
+            equipmentType: data.equipmentType || "",
+            status: data.status || "ARA",
+            ownerName: data.ownerName || ""
           });
         }
       });
@@ -271,6 +348,8 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         equipmentType: string;
         plateNo: string;
         capacity: number;
+        status: "ARA" | "rented";
+        ownerName: string;
         createdAt: string;
       }
 
@@ -282,8 +361,24 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         const unloading = data.unloadingDetails;
         if (unloading && unloading.equipmentPlateNo && unloading.equipmentPlateNo.trim()) {
           const plate = unloading.equipmentPlateNo.trim().toUpperCase();
-          const siteObj = sites.find(s => s.id === data.siteId);
-          const actualSiteNo = siteObj ? siteObj.siteNo : (data.siteNo || "N/A");
+          
+          // Robust site lookup: match by ID first, or by site number string (with fallback to data.siteNo)
+          let siteObj = sites.find(s => s.id === data.siteId);
+          if (!siteObj && (data.siteId || data.siteNo)) {
+            const cleanIdStr = String(data.siteId || data.siteNo).trim().toLowerCase();
+            if (cleanIdStr && cleanIdStr !== "undefined" && cleanIdStr !== "null") {
+              siteObj = sites.find(s => {
+                const sNo = String(s.siteNo || "").toLowerCase();
+                if (sNo === cleanIdStr) return true;
+                const digitsS = sNo.replace(/\D/g, "");
+                const digitsClean = cleanIdStr.replace(/\D/g, "");
+                return digitsS && digitsClean && digitsS === digitsClean;
+              });
+            }
+          }
+          
+          const actualSiteId = siteObj ? siteObj.id : (data.siteId || "");
+          const actualSiteNo = siteObj ? String(siteObj.siteNo) : String(data.siteNo || "N/A");
           
           let rawType = unloading.equipmentType || "Mobile Crane";
           let eqType = "Mobile Crane";
@@ -294,15 +389,20 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
           else if (rawType.trim()) eqType = rawType.trim();
 
-          const currentLogDate = data.createdAt || new Date().toISOString();
+          const currentLogDate = parseToIsoString(data.createdAt || data.updatedAt);
           const existing = latestCranesMap.get(plate);
           if (!existing || currentLogDate > existing.createdAt) {
+            const loggedStatus = unloading.equipmentStatus || "ARA";
+            const loggedOwner = (unloading.operatorName || "").trim() ? `Operator: ${(unloading.operatorName || "").trim()}` : "";
+            
             latestCranesMap.set(plate, {
-              siteId: data.siteId || "",
+              siteId: actualSiteId,
               siteNo: actualSiteNo,
               equipmentType: eqType,
               plateNo: plate,
               capacity: Number(unloading.capacity) || 25,
+              status: loggedStatus,
+              ownerName: loggedOwner,
               createdAt: currentLogDate
             });
           }
@@ -315,8 +415,24 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
         const erection = data.erectionDetails;
         if (erection && erection.equipmentPlateNo && erection.equipmentPlateNo.trim()) {
           const plate = erection.equipmentPlateNo.trim().toUpperCase();
-          const siteObj = sites.find(s => s.id === data.siteId);
-          const actualSiteNo = siteObj ? siteObj.siteNo : (data.siteNo || "N/A");
+          
+          // Robust site lookup: match by ID first, or by site number string (with fallback to data.siteNo)
+          let siteObj = sites.find(s => s.id === data.siteId);
+          if (!siteObj && (data.siteId || data.siteNo)) {
+            const cleanIdStr = String(data.siteId || data.siteNo).trim().toLowerCase();
+            if (cleanIdStr && cleanIdStr !== "undefined" && cleanIdStr !== "null") {
+              siteObj = sites.find(s => {
+                const sNo = String(s.siteNo || "").toLowerCase();
+                if (sNo === cleanIdStr) return true;
+                const digitsS = sNo.replace(/\D/g, "");
+                const digitsClean = cleanIdStr.replace(/\D/g, "");
+                return digitsS && digitsClean && digitsS === digitsClean;
+              });
+            }
+          }
+          
+          const actualSiteId = siteObj ? siteObj.id : (data.siteId || "");
+          const actualSiteNo = siteObj ? String(siteObj.siteNo) : String(data.siteNo || "N/A");
           
           let rawType = erection.equipmentType || "Mobile Crane";
           let eqType = "Mobile Crane";
@@ -327,15 +443,20 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           else if (rawType.toLowerCase().includes("boom")) eqType = "Boom Truck";
           else if (rawType.trim()) eqType = rawType.trim();
 
-          const currentLogDate = data.createdAt || new Date().toISOString();
+          const currentLogDate = parseToIsoString(data.createdAt || data.updatedAt);
           const existing = latestCranesMap.get(plate);
           if (!existing || currentLogDate > existing.createdAt) {
+            const loggedStatus = erection.equipmentStatus || "ARA";
+            const loggedOwner = (erection.operatorName || "").trim() ? `Operator: ${(erection.operatorName || "").trim()}` : "";
+            
             latestCranesMap.set(plate, {
-              siteId: data.siteId || "",
+              siteId: actualSiteId,
               siteNo: actualSiteNo,
               equipmentType: eqType,
               plateNo: plate,
               capacity: Number(erection.capacity) || 25,
+              status: loggedStatus,
+              ownerName: loggedOwner,
               createdAt: currentLogDate
             });
           }
@@ -349,17 +470,22 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
       for (const [plate, logged] of latestCranesMap.entries()) {
         const existing = existingEquipMap.get(plate);
         if (existing) {
-          // If the logged site, capacity or type is different, update the general directory to reflect the latest status
+          // If any field changed, update the record
           if (
             existing.siteId !== logged.siteId || 
+            existing.siteNo !== logged.siteNo ||
             existing.capacity !== logged.capacity || 
-            existing.equipmentType !== logged.equipmentType
+            existing.equipmentType !== logged.equipmentType ||
+            existing.status !== logged.status ||
+            existing.ownerName !== logged.ownerName
           ) {
             await updateDoc(doc(db, "equipment", existing.id), {
               siteId: logged.siteId,
               siteNo: logged.siteNo,
               equipmentType: logged.equipmentType,
               capacity: logged.capacity,
+              status: logged.status,
+              ownerName: logged.ownerName,
               updatedAt: new Date().toISOString()
             });
             updateCount++;
@@ -372,8 +498,8 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
             equipmentType: logged.equipmentType,
             plateNo: logged.plateNo,
             capacity: logged.capacity,
-            status: "ARA",
-            ownerName: "",
+            status: logged.status,
+            ownerName: logged.ownerName,
             createdAt: logged.createdAt,
             updatedAt: new Date().toISOString()
           });
@@ -401,19 +527,14 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
     }
   };
 
-  // Perform a silent sync on component mount to fetch any unsynced cranes automatically
-  useEffect(() => {
-    // Silent sync on first load
-    handleAutoSyncCranes(true);
-  }, []);
-
   // Filtered equipment by Site Number (case insensitive search)
   const filteredEquipment = useMemo(() => {
-    if (!searchSiteNo.trim()) return equipmentList;
+    const cleanSearchStr = String(searchSiteNo || "").trim().toLowerCase();
+    if (!cleanSearchStr) return equipmentList;
     return equipmentList.filter((eq) => {
       const site = sites.find((s) => s.id === eq.siteId);
-      const actualSiteNo = site ? site.siteNo : eq.siteNo;
-      return actualSiteNo.toLowerCase().includes(searchSiteNo.trim().toLowerCase());
+      const actualSiteNo = String(site ? site.siteNo : (eq.siteNo || "")).trim().toLowerCase();
+      return actualSiteNo.includes(cleanSearchStr);
     });
   }, [equipmentList, searchSiteNo, sites]);
 
@@ -1085,6 +1206,151 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
           </div>
         </div>
       )}
+
+      {/* Collapsible Diagnostics Section */}
+      <div className="mt-8 border border-slate-800 rounded-3xl overflow-hidden bg-slate-950/20 non-printable">
+        <button
+          type="button"
+          onClick={() => {
+            const nextVal = !showDiagnostics;
+            setShowDiagnostics(nextVal);
+            if (nextVal) {
+              loadDiagnostics();
+            }
+          }}
+          className="w-full flex items-center justify-between p-4 px-5 text-left text-xs font-bold text-slate-400 bg-slate-900/40 hover:bg-slate-900/60 transition-all focus:outline-none cursor-pointer"
+        >
+          <span className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-slate-500" />
+            🔍 SYSTEM DATABASE INSPECTOR (DEVELOPER DIAGNOSTICS)
+          </span>
+          <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">
+            {showDiagnostics ? "Collapse" : "Expand"}
+          </span>
+        </button>
+
+        {showDiagnostics && (
+          <div className="p-5 border-t border-slate-800/80 bg-slate-950/40 animate-fade-in flex flex-col gap-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-4 border border-slate-800/50 rounded-2xl">
+              <div>
+                <h5 className="text-xs font-black text-white uppercase tracking-wider">
+                  Live Firestore Diagnostics
+                </h5>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
+                  See raw, unfiltered collections from the Firestore database to diagnose any data entry or sync conflicts.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadDiagnostics}
+                disabled={diagLoading}
+                className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/20 font-bold py-1.5 px-3 rounded-xl text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {diagLoading ? "Loading..." : "Reload Raw Collections"}
+              </button>
+            </div>
+
+            {diagLoading ? (
+              <div className="flex justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                
+                {/* Deliveries Logs */}
+                <div className="bg-slate-900/30 border border-slate-800/60 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-800/60 pb-2">
+                    <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider">
+                      🚚 Raw Delivery Logs ({diagDeliveries.length})
+                    </span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto font-mono text-[10px] text-slate-300 space-y-1.5 divide-y divide-slate-900/50">
+                    {diagDeliveries.length > 0 ? (
+                      diagDeliveries.map((d, idx) => (
+                        <div key={d.id || idx} className="pt-1.5 first:pt-0">
+                          <div className="font-sans font-bold text-white flex justify-between">
+                            <span>MDR: {d.mdrNo || "N/A"} (Site {d.siteNo || "N/A"})</span>
+                            <span className="text-slate-500">{d.createdAt ? new Date(d.createdAt).toLocaleDateString() : "No Date"}</span>
+                          </div>
+                          <div className="text-slate-450 mt-0.5">
+                            Plate: <span className="text-blue-400 font-bold">{d.unloadingDetails?.equipmentPlateNo || "None"}</span> | Type: {d.unloadingDetails?.equipmentType || "None"} ({d.unloadingDetails?.capacity || "0"}T)
+                          </div>
+                          <div className="text-slate-600 text-[9px] mt-0.5 truncate">
+                            ID: {d.id} | siteId: {d.siteId}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 italic block py-2">No raw delivery logs found in Firestore.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Erections Logs */}
+                <div className="bg-slate-900/30 border border-slate-800/60 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-800/60 pb-2">
+                    <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider">
+                      🏗️ Raw Erection Logs ({diagErections.length})
+                    </span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto font-mono text-[10px] text-slate-300 space-y-1.5 divide-y divide-slate-900/50">
+                    {diagErections.length > 0 ? (
+                      diagErections.map((e, idx) => (
+                        <div key={e.id || idx} className="pt-1.5 first:pt-0">
+                          <div className="font-sans font-bold text-white flex justify-between">
+                            <span>ER: {e.mdrNo || "N/A"} (Site {e.siteNo || "N/A"})</span>
+                            <span className="text-slate-500">{e.createdAt ? new Date(e.createdAt).toLocaleDateString() : "No Date"}</span>
+                          </div>
+                          <div className="text-slate-450 mt-0.5">
+                            Plate: <span className="text-blue-400 font-bold">{e.erectionDetails?.equipmentPlateNo || "None"}</span> | Type: {e.erectionDetails?.equipmentType || "None"} ({e.erectionDetails?.capacity || "0"}T)
+                          </div>
+                          <div className="text-slate-600 text-[9px] mt-0.5 truncate">
+                            ID: {e.id} | siteId: {e.siteId}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 italic block py-2">No raw erection logs found in Firestore.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Equipment Directory */}
+                <div className="lg:col-span-2 bg-slate-900/30 border border-slate-800/60 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-800/60 pb-2">
+                    <span className="text-[11px] font-black text-blue-400 uppercase tracking-wider">
+                      🛠️ Registered Equipment Collection ({equipmentList.length})
+                    </span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto font-mono text-[10px] text-slate-300 space-y-1.5 divide-y divide-slate-900/50">
+                    {equipmentList.length > 0 ? (
+                      equipmentList.map((eq) => (
+                        <div key={eq.id} className="pt-1.5 first:pt-0 flex flex-wrap justify-between gap-2">
+                          <div>
+                            <span className="text-blue-300 font-bold">{eq.plateNo}</span> ({eq.equipmentType} - {eq.capacity}T)
+                            <div className="text-slate-500 mt-0.5 text-[9px]">
+                              DocID: {eq.id} | siteId: {eq.siteId} | siteNo: {eq.siteNo}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 font-sans">Deployed: Site {eq.siteNo}</span>
+                            <div className="text-slate-600 text-[9px] mt-0.5">
+                              Status: {eq.status} | Owner: {eq.ownerName || "None"}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 italic block py-2">No registered equipment records found.</span>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
     </div>
   );

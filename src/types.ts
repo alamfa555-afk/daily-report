@@ -17,6 +17,7 @@ export interface UnloadingDetails {
   equipmentPlateNo: string;
   operatorName: string;
   operatorId: string;
+  equipmentStatus?: "ARA" | "rented";
 }
 
 export interface ErectionDetails {
@@ -28,6 +29,7 @@ export interface ErectionDetails {
   equipmentPlateNo: string;
   operatorName: string;
   operatorId: string;
+  equipmentStatus?: "ARA" | "rented";
 }
 
 export interface Delivery {
