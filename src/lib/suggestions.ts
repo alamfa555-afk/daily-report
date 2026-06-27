@@ -21,8 +21,7 @@ export async function saveSuggestion(fieldName: string, value: string) {
       createdAt: new Date().toISOString()
     }, { merge: true });
   } catch (err) {
-    console.error(`Error saving suggestion for ${fieldName}:`, err);
-    handleFirestoreError(err, OperationType.WRITE, "suggestions");
+    console.warn(`Error saving suggestion for ${fieldName}:`, err);
   }
 }
 

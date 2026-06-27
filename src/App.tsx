@@ -13,7 +13,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { Site, Delivery, Erection, Suggestion } from "./types";
-import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, getDocs, deleteDoc, doc } from "./lib/firebase";
+import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType } from "./lib/firebase";
 import { DEFAULT_SUGGESTIONS } from "./lib/suggestions";
 import SiteSelector from "./components/SiteSelector";
 import DeliveryForm from "./components/DeliveryForm";
@@ -59,52 +59,6 @@ export default function App() {
   
   // Loaders
   const [loadingSites, setLoadingSites] = useState(true);
-
-  // One-time database sweep to clean up any entry logged without a valid site ID/number (such as any orphaned Samshad entries)
-  useEffect(() => {
-    const cleanUpOrphanEntries = async () => {
-      try {
-        // 1. Deliveries Log sweep
-        const delSnapshot = await getDocs(collection(db, "deliveries"));
-        for (const docSnapshot of delSnapshot.docs) {
-          const data = docSnapshot.data();
-          const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isMissingSite) {
-            console.log("Removing delivery record with missing or invalid site:", docSnapshot.id);
-            await deleteDoc(doc(db, "deliveries", docSnapshot.id));
-          }
-        }
-
-        // 2. Erections Log sweep
-        const ereSnapshot = await getDocs(collection(db, "erections"));
-        for (const docSnapshot of ereSnapshot.docs) {
-          const data = docSnapshot.data();
-          const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isMissingSite) {
-            console.log("Removing erection record with missing or invalid site:", docSnapshot.id);
-            await deleteDoc(doc(db, "erections", docSnapshot.id));
-          }
-        }
-
-        // 3. Equipment Log (Crane directory) sweep
-        const eqSnapshot = await getDocs(collection(db, "equipment"));
-        for (const docSnapshot of eqSnapshot.docs) {
-          const data = docSnapshot.data();
-          const isMissingSite = !data.siteId || data.siteId === "" || !sites.some(s => s.id === data.siteId);
-          if (isMissingSite) {
-            console.log("Removing equipment record with missing or invalid site:", docSnapshot.id);
-            await deleteDoc(doc(db, "equipment", docSnapshot.id));
-          }
-        }
-      } catch (err) {
-        console.error("Error executing database cleanup sweep:", err);
-      }
-    };
-
-    if (sites.length > 0) {
-      cleanUpOrphanEntries();
-    }
-  }, [sites]);
 
   // 1. Listen for project sites in real-time
   useEffect(() => {
