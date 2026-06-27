@@ -131,28 +131,27 @@ export default function DeliveryForm({
     return mapping;
   }, [employeeNameMap]);
 
-  // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
-  useEffect(() => {
-    const cleanId = unloaderId.trim().toUpperCase();
+  // Auto fill Employee Name / ID on change or suggestion select
+  const handleUnloaderIdChange = (idVal: string) => {
+    setUnloaderId(idVal);
+    const cleanId = idVal.trim().toUpperCase();
     if (cleanId && knownEmployees[cleanId]) {
-      if (unloaderName !== knownEmployees[cleanId]) {
-        setUnloaderName(knownEmployees[cleanId]);
-      }
+      setUnloaderName(knownEmployees[cleanId]);
     }
-  }, [unloaderId, knownEmployees]);
+  };
 
-  // Auto fill Employee ID when Employee Name is typed or chosen from suggestions
-  useEffect(() => {
-    const cleanName = unloaderName.trim().toUpperCase();
+  const handleUnloaderNameChange = (nameVal: string) => {
+    setUnloaderName(nameVal);
+    const cleanName = nameVal.trim().toUpperCase();
     if (cleanName) {
       const foundId = Object.keys(knownEmployees).find(
         id => knownEmployees[id].toUpperCase() === cleanName
       );
-      if (foundId && unloaderId !== foundId) {
+      if (foundId) {
         setUnloaderId(foundId);
       }
     }
-  }, [unloaderName, knownEmployees]);
+  };
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -630,7 +629,7 @@ export default function DeliveryForm({
             label="EMPLOYEE ID"
             required
             value={unloaderId}
-            onChange={setUnloaderId}
+            onChange={handleUnloaderIdChange}
             suggestions={Object.keys(knownEmployees)}
             placeholder="Search/Enter ID (e.g. 1001, 1002, 1003)"
             fieldName="unloaderId"
@@ -640,7 +639,7 @@ export default function DeliveryForm({
             label="EMPLOYEE NAME"
             required
             value={unloaderName}
-            onChange={setUnloaderName}
+            onChange={handleUnloaderNameChange}
             suggestions={Object.values(knownEmployees)}
             placeholder="Type name..."
             fieldName="unloaderName"

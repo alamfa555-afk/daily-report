@@ -129,28 +129,27 @@ export default function ErectionForm({
     return mapping;
   }, [employeeNameMap]);
 
-  // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
-  useEffect(() => {
-    const cleanId = erectorId.trim().toUpperCase();
+  // Auto fill Employee Name / ID on change or suggestion select
+  const handleErectorIdChange = (idVal: string) => {
+    setErectorId(idVal);
+    const cleanId = idVal.trim().toUpperCase();
     if (cleanId && knownEmployees[cleanId]) {
-      if (erectorName !== knownEmployees[cleanId]) {
-        setErectorName(knownEmployees[cleanId]);
-      }
+      setErectorName(knownEmployees[cleanId]);
     }
-  }, [erectorId, knownEmployees]);
+  };
 
-  // Auto fill Employee ID when Employee Name is typed or chosen from suggestions
-  useEffect(() => {
-    const cleanName = erectorName.trim().toUpperCase();
+  const handleErectorNameChange = (nameVal: string) => {
+    setErectorName(nameVal);
+    const cleanName = nameVal.trim().toUpperCase();
     if (cleanName) {
       const foundId = Object.keys(knownEmployees).find(
         id => knownEmployees[id].toUpperCase() === cleanName
       );
-      if (foundId && erectorId !== foundId) {
+      if (foundId) {
         setErectorId(foundId);
       }
     }
-  }, [erectorName, knownEmployees]);
+  };
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -622,7 +621,7 @@ export default function ErectionForm({
             label="EMPLOYEE ID"
             required
             value={erectorId}
-            onChange={setErectorId}
+            onChange={handleErectorIdChange}
             suggestions={Object.keys(knownEmployees)}
             placeholder="Search/Enter ID (e.g. 1001, 1002, 1003)"
             fieldName="erectorId"
@@ -632,7 +631,7 @@ export default function ErectionForm({
             label="EMPLOYEE NAME"
             required
             value={erectorName}
-            onChange={setErectorName}
+            onChange={handleErectorNameChange}
             suggestions={Object.values(knownEmployees)}
             placeholder="Type name..."
             fieldName="erectorName"
