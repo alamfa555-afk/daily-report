@@ -1,4 +1,4 @@
-import { db, collection, setDoc, doc, getDocs, handleFirestoreError, OperationType } from "./firebase";
+import { db, collection, setDoc, doc, getDoc, updateDoc, getDocs, handleFirestoreError, OperationType } from "./firebase";
 import { Suggestion } from "../types";
 
 /**
@@ -20,6 +20,23 @@ export async function saveSuggestion(fieldName: string, value: string) {
       value: trimmedValue,
       createdAt: new Date().toISOString()
     }, { merge: true });
+
+    // Automatically remove from blacklist if saved again
+    try {
+      const blacklistRef = doc(db, "settings", "suggestions_config");
+      const blacklistSnap = await getDoc(blacklistRef);
+      if (blacklistSnap.exists()) {
+        const blacklistData = blacklistSnap.data();
+        const currentBlacklist = (blacklistData.blacklist || []) as string[];
+        const itemKey = `${fieldName}:${trimmedValue.toUpperCase()}`;
+        if (currentBlacklist.includes(itemKey)) {
+          const updated = currentBlacklist.filter((x: string) => x !== itemKey);
+          await updateDoc(blacklistRef, { blacklist: updated });
+        }
+      }
+    } catch (blacklistErr) {
+      console.warn("Error auto-removing suggestion from blacklist:", blacklistErr);
+    }
   } catch (err) {
     console.warn(`Error saving suggestion for ${fieldName}:`, err);
   }

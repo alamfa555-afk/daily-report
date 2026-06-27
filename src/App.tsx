@@ -16,7 +16,7 @@ import {
   Trash2
 } from "lucide-react";
 import { Site, Delivery, Erection, Suggestion } from "./types";
-import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, doc, deleteDoc } from "./lib/firebase";
+import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, doc, deleteDoc, setDoc } from "./lib/firebase";
 import { DEFAULT_SUGGESTIONS } from "./lib/suggestions";
 import SiteSelector from "./components/SiteSelector";
 import DeliveryForm from "./components/DeliveryForm";
@@ -36,6 +36,7 @@ export default function App() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [erections, setErections] = useState<Erection[]>([]);
   const [suggestionsMap, setSuggestionsMap] = useState<Record<string, string[]>>({});
+  const [blacklist, setBlacklist] = useState<string[]>([]);
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>("");
   const [cleaningStatus, setCleaningStatus] = useState<string>("");
   const [cleanedCount, setCleanedCount] = useState<number>(0);
@@ -236,6 +237,20 @@ export default function App() {
     autoCleanDuplicates();
   }, [erections, deliveries]);
 
+  // 2b. Listen for suggestion blacklist in real-time
+  useEffect(() => {
+    const unsubBlacklist = onSnapshot(doc(db, "settings", "suggestions_config"), (snapshot) => {
+      if (snapshot.exists()) {
+        setBlacklist(snapshot.data().blacklist || []);
+      } else {
+        setBlacklist([]);
+      }
+    }, (error) => {
+      console.warn("Error loading suggestion blacklist:", error);
+    });
+    return () => unsubBlacklist();
+  }, []);
+
   // 3. Listen for suggestions in real-time to build the autocompleting dropdowns
   useEffect(() => {
     const unsubSuggestions = onSnapshot(collection(db, "suggestions"), (snapshot) => {
@@ -415,29 +430,25 @@ export default function App() {
       }
     });
 
-    // Convert sets to sorted arrays
+    // Convert sets to sorted arrays and filter out blacklisted items
     const finalMap: Record<string, string[]> = {};
     Object.entries(combined).forEach(([field, valueSet]) => {
-      finalMap[field] = Array.from(valueSet).sort((a, b) => a.localeCompare(b));
+      const sortedVals = Array.from(valueSet).sort((a, b) => a.localeCompare(b));
+      finalMap[field] = sortedVals.filter(v => {
+        const key = `${field}:${v.trim().toUpperCase()}`;
+        return !blacklist.includes(key);
+      });
     });
 
     return finalMap;
-  }, [suggestionsMap, deliveries, erections]);
+  }, [suggestionsMap, deliveries, erections, blacklist]);
 
   // Dynamic Employee ID -> Name map with STRICT 1-to-1 mapping constraints
   const employeeNameMap = useMemo(() => {
     const mapping: Record<string, string> = {};
     
-    // 1. Pre-populate with standard default employee entries
-    const defaults: Record<string, string> = {
-      "1001": "SAMSHAD ALAM",
-      "1002": "SURESH SINGH",
-      "1003": "RAMESH KUMAR"
-    };
-
-    Object.entries(defaults).forEach(([id, name]) => {
-      mapping[id] = name;
-    });
+    // 1. Pre-populate with standard default employee entries (Empty, as requested to delete them!)
+    const defaults: Record<string, string> = {};
 
     // 2. Scan deliveries and build dynamic mapping (ignoring conflicts)
     deliveries.forEach(d => {
@@ -491,8 +502,27 @@ export default function App() {
       }
     });
 
-    return mapping;
-  }, [deliveries, erections]);
+    // 4. Filter out any blacklisted employee IDs or names
+    const filteredMapping: Record<string, string> = {};
+    Object.entries(mapping).forEach(([id, name]) => {
+      const idKey = `unloaderId:${id.toUpperCase()}`;
+      const nameKey = `unloaderName:${name.toUpperCase()}`;
+      const idKeyErect = `erectorId:${id.toUpperCase()}`;
+      const nameKeyErect = `erectorName:${name.toUpperCase()}`;
+      
+      const isBlacklisted = 
+        blacklist.includes(idKey) || 
+        blacklist.includes(nameKey) ||
+        blacklist.includes(idKeyErect) ||
+        blacklist.includes(nameKeyErect);
+        
+      if (!isBlacklisted) {
+        filteredMapping[id] = name;
+      }
+    });
+
+    return filteredMapping;
+  }, [deliveries, erections, blacklist]);
 
   // Compute the last entry of each to enable easy operator/equipment autofills
   const lastDelivery = useMemo(() => {
@@ -502,6 +532,121 @@ export default function App() {
   const lastErection = useMemo(() => {
     return erections.length > 0 ? erections[0] : null;
   }, [erections]);
+
+  const handleDeleteSuggestion = async (fieldName: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    
+    // 1. Delete document from Firestore suggestions collection if exists
+    const docId = `${fieldName.toLowerCase()}_${trimmed.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+    try {
+      await deleteDoc(doc(db, "suggestions", docId));
+    } catch (err) {
+      console.warn("Error deleting suggestion doc:", err);
+    }
+
+    // 2. Add to blacklist in settings/suggestions_config to hide it even if it exists in history
+    try {
+      const blacklistRef = doc(db, "settings", "suggestions_config");
+      const key = `${fieldName}:${trimmed.toUpperCase()}`;
+      
+      const newBlacklist = [...blacklist];
+      if (!newBlacklist.includes(key)) {
+        newBlacklist.push(key);
+      }
+      
+      // Also if it's an employee ID, blacklist both unloader and erector versions
+      if (fieldName === "unloaderId" || fieldName === "erectorId") {
+        const uIdKey = `unloaderId:${trimmed.toUpperCase()}`;
+        const eIdKey = `erectorId:${trimmed.toUpperCase()}`;
+        if (!newBlacklist.includes(uIdKey)) newBlacklist.push(uIdKey);
+        if (!newBlacklist.includes(eIdKey)) newBlacklist.push(eIdKey);
+      }
+      if (fieldName === "unloaderName" || fieldName === "erectorName") {
+        const uNameKey = `unloaderName:${trimmed.toUpperCase()}`;
+        const eNameKey = `erectorName:${trimmed.toUpperCase()}`;
+        if (!newBlacklist.includes(uNameKey)) newBlacklist.push(uNameKey);
+        if (!newBlacklist.includes(eNameKey)) newBlacklist.push(eNameKey);
+      }
+
+      await setDoc(blacklistRef, { blacklist: newBlacklist }, { merge: true });
+    } catch (err) {
+      console.error("Error updating blacklist:", err);
+    }
+  };
+
+  const handleClearFieldSuggestions = async (fieldNames: string[], activeValues: string[]) => {
+    // 1. Delete matching documents from Firestore suggestions
+    for (const fieldName of fieldNames) {
+      for (const val of activeValues) {
+        const docId = `${fieldName.toLowerCase()}_${val.trim().toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+        try {
+          await deleteDoc(doc(db, "suggestions", docId));
+        } catch (err) {
+          // ignore
+        }
+      }
+    }
+
+    // 2. Blacklist all activeValues for these fields
+    try {
+      const blacklistRef = doc(db, "settings", "suggestions_config");
+      const newBlacklist = [...blacklist];
+      
+      fieldNames.forEach(fieldName => {
+        activeValues.forEach(val => {
+          const key = `${fieldName}:${val.trim().toUpperCase()}`;
+          if (!newBlacklist.includes(key)) {
+            newBlacklist.push(key);
+          }
+        });
+      });
+
+      await setDoc(blacklistRef, { blacklist: newBlacklist }, { merge: true });
+    } catch (err) {
+      console.error("Error clearing suggestions:", err);
+    }
+  };
+
+  const handleClearEmployees = async () => {
+    // Get all active employee IDs and Names
+    const activeIds = Object.keys(employeeNameMap) as string[];
+    const activeNames = Object.values(employeeNameMap) as string[];
+
+    // Delete suggestion docs
+    for (const id of activeIds) {
+      await deleteDoc(doc(db, "suggestions", `unloaderid_${id.toLowerCase().replace(/[^a-z0-9]/g, "_")}`));
+      await deleteDoc(doc(db, "suggestions", `erectorid_${id.toLowerCase().replace(/[^a-z0-9]/g, "_")}`));
+    }
+    for (const name of activeNames) {
+      await deleteDoc(doc(db, "suggestions", `unloadername_${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`));
+      await deleteDoc(doc(db, "suggestions", `erectorname_${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`));
+    }
+
+    // Add to blacklist
+    try {
+      const blacklistRef = doc(db, "settings", "suggestions_config");
+      const newBlacklist = [...blacklist];
+
+      activeIds.forEach(id => {
+        const idU = `unloaderId:${id.toUpperCase()}`;
+        const idE = `erectorId:${id.toUpperCase()}`;
+        if (!newBlacklist.includes(idU)) newBlacklist.push(idU);
+        if (!newBlacklist.includes(idE)) newBlacklist.push(idE);
+      });
+
+      activeNames.forEach(name => {
+        const nameU = `unloaderName:${name.toUpperCase()}`;
+        const nameE = `erectorName:${name.toUpperCase()}`;
+        if (!newBlacklist.includes(nameU)) newBlacklist.push(nameU);
+        if (!newBlacklist.includes(nameE)) newBlacklist.push(nameE);
+      });
+
+      await setDoc(blacklistRef, { blacklist: newBlacklist }, { merge: true });
+    } catch (err) {
+      console.error("Error clearing employees blacklist:", err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col font-sans antialiased relative overflow-hidden bg-radial from-[#0a1128] via-[#020617] to-[#010409]">
@@ -848,6 +993,158 @@ export default function App() {
                     <Trash2 className="h-3.5 w-3.5 text-red-400" />
                     Force Scan & Clean Duplicates
                   </button>
+                </div>
+
+                {/* Auto-Suggestions & Workers Manager */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 text-xs space-y-4 shadow-lg">
+                  <h4 className="font-black text-white uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-800">
+                    <Database className="h-4 w-4 text-blue-400" />
+                    Suggestions & Workers Manager
+                  </h4>
+                  
+                  <p className="text-slate-400 text-[10px] leading-relaxed">
+                    View and delete previously saved autocomplete values or employee profiles to reset or update them.
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* 1. Trailer Numbers Section */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">Trailer Numbers ({mergedSuggestionsMap.trailerNo?.length || 0})</span>
+                        {(mergedSuggestionsMap.trailerNo?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleClearFieldSuggestions(["trailerNo"], mergedSuggestionsMap.trailerNo || [])}
+                            className="text-[9px] text-red-400 hover:text-red-300 font-extrabold uppercase tracking-wider cursor-pointer"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="max-h-24 overflow-y-auto bg-slate-950/40 border border-slate-800/60 rounded p-1.5 space-y-1 scrollbar-thin">
+                        {(mergedSuggestionsMap.trailerNo?.length || 0) === 0 ? (
+                          <div className="text-center py-2 text-slate-500 text-[10px]">No active trailer suggestions</div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {(mergedSuggestionsMap.trailerNo || []).map(val => (
+                              <div key={val} className="flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-200 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                                <span>{val}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSuggestion("trailerNo", val)}
+                                  className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer ml-1 font-bold"
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Crane Plate Numbers Section */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">Crane Plate Numbers ({mergedSuggestionsMap.equipmentPlateNo?.length || 0})</span>
+                        {(mergedSuggestionsMap.equipmentPlateNo?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleClearFieldSuggestions(["equipmentPlateNo"], mergedSuggestionsMap.equipmentPlateNo || [])}
+                            className="text-[9px] text-red-400 hover:text-red-300 font-extrabold uppercase tracking-wider cursor-pointer"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="max-h-24 overflow-y-auto bg-slate-950/40 border border-slate-800/60 rounded p-1.5 space-y-1 scrollbar-thin">
+                        {(mergedSuggestionsMap.equipmentPlateNo?.length || 0) === 0 ? (
+                          <div className="text-center py-2 text-slate-500 text-[10px]">No active crane suggestions</div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {(mergedSuggestionsMap.equipmentPlateNo || []).map(val => (
+                              <div key={val} className="flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-200 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                                <span>{val}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSuggestion("equipmentPlateNo", val)}
+                                  className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer ml-1 font-bold"
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. Employee ID -> Name Map Section */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">Employee Mappings ({Object.keys(employeeNameMap).length})</span>
+                        {Object.keys(employeeNameMap).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearEmployees}
+                            className="text-[9px] text-red-400 hover:text-red-300 font-extrabold uppercase tracking-wider cursor-pointer"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="max-h-36 overflow-y-auto bg-slate-950/40 border border-slate-800/60 rounded p-1.5 space-y-1 scrollbar-thin">
+                        {Object.keys(employeeNameMap).length === 0 ? (
+                          <div className="text-center py-2 text-slate-500 text-[10px]">No registered employee profiles</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {(Object.entries(employeeNameMap) as [string, string][]).map(([id, name]) => (
+                              <div key={id} className="flex items-center justify-between bg-slate-900 border border-slate-800/80 px-2 py-1 rounded text-[10px]">
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="font-mono font-bold text-blue-400 shrink-0">#{id}</span>
+                                  <span className="text-slate-200 font-medium truncate">{name}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await handleDeleteSuggestion("unloaderId", id);
+                                    await handleDeleteSuggestion("unloaderName", name);
+                                  }}
+                                  className="text-slate-500 hover:text-red-400 font-black p-0.5 cursor-pointer shrink-0"
+                                  title="Delete Employee Profile"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {blacklist.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-[9px]">
+                      <span className="text-slate-500 font-medium">Deleted entries hidden: {blacklist.length}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const blacklistRef = doc(db, "settings", "suggestions_config");
+                            await setDoc(blacklistRef, { blacklist: [] }, { merge: true });
+                          } catch (err) {
+                            console.error("Error clearing blacklist:", err);
+                          }
+                        }}
+                        className="text-blue-400 hover:text-blue-300 font-black uppercase tracking-wider cursor-pointer"
+                      >
+                        Restore All Deleted
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-xs space-y-2">
