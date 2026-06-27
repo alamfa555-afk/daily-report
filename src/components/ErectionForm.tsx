@@ -110,13 +110,32 @@ export default function ErectionForm({
     }
   }, [lastErection]);
 
+  // Merge initial default employees and dynamic ones from the DB
+  const knownEmployees = React.useMemo(() => {
+    const mapping: Record<string, string> = {};
+    
+    // 1. Initial defaults
+    Object.entries(ALLOWED_EMPLOYEES).forEach(([id, name]) => {
+      mapping[id.trim().toUpperCase()] = name.trim();
+    });
+
+    // 2. Dynamic loaded from DB
+    if (employeeNameMap) {
+      Object.entries(employeeNameMap).forEach(([id, name]) => {
+        mapping[id.trim().toUpperCase()] = name.trim();
+      });
+    }
+
+    return mapping;
+  }, [employeeNameMap]);
+
   // Auto fill Employee Name when Employee ID is typed or chosen from suggestions
   useEffect(() => {
-    const cleanId = erectorId.trim();
-    if (cleanId && ALLOWED_EMPLOYEES[cleanId]) {
-      setErectorName(ALLOWED_EMPLOYEES[cleanId]);
+    const cleanId = erectorId.trim().toUpperCase();
+    if (cleanId && knownEmployees[cleanId]) {
+      setErectorName(knownEmployees[cleanId]);
     }
-  }, [erectorId]);
+  }, [erectorId, knownEmployees]);
 
   // Handle adding a new blank product item card to the list
   const handleAddItem = () => {
@@ -200,16 +219,17 @@ export default function ErectionForm({
       return;
     }
 
-    // Strict Employee validation (Only 1001, 1002, 1003)
-    const cleanEmpId = erectorId.trim();
+    // Flexible Employee validation:
+    // If Employee ID exists in knownEmployees, its name must match exactly.
+    // If it doesn't exist, allow it as a new entry.
+    const cleanEmpId = erectorId.trim().toUpperCase();
     const cleanEmpName = erectorName.trim().toUpperCase();
-    if (!ALLOWED_EMPLOYEES[cleanEmpId]) {
-      setErrorList("Invalid Employee ID. Only 1001, 1002, 1003 are permitted.");
-      return;
-    }
-    if (ALLOWED_EMPLOYEES[cleanEmpId].toUpperCase() !== cleanEmpName) {
-      setErrorList(`Employee ID ${cleanEmpId} must exactly match Employee Name "${ALLOWED_EMPLOYEES[cleanEmpId]}".`);
-      return;
+    if (knownEmployees[cleanEmpId]) {
+      const expectedName = knownEmployees[cleanEmpId].toUpperCase();
+      if (expectedName !== cleanEmpName) {
+        setErrorList(`Employee ID ${erectorId.trim()} must exactly match Employee Name "${knownEmployees[cleanEmpId]}".`);
+        return;
+      }
     }
 
     // Validate all entered items inside list
@@ -577,8 +597,8 @@ export default function ErectionForm({
             required
             value={erectorId}
             onChange={setErectorId}
-            suggestions={Object.keys(ALLOWED_EMPLOYEES)}
-            placeholder="Search/Enter ID (1001, 1002, 1003)"
+            suggestions={Object.keys(knownEmployees)}
+            placeholder="Search/Enter ID (e.g. 1001, 1002, 1003)"
             fieldName="erectorId"
           />
 
@@ -587,7 +607,7 @@ export default function ErectionForm({
             required
             value={erectorName}
             onChange={setErectorName}
-            suggestions={Object.values(ALLOWED_EMPLOYEES)}
+            suggestions={Object.values(knownEmployees)}
             placeholder="Type name..."
             fieldName="erectorName"
           />
