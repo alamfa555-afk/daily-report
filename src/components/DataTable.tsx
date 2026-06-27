@@ -46,14 +46,58 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
     setUpdating(true);
     setErrorBanner(null);
 
+    const targetQty = Number(editingRecord.data.quantity) || 0;
+    const code = (editingRecord.data.elementCode || "").trim().toUpperCase();
+    const siteId = editingRecord.data.siteId;
+
+    if (editingRecord.type === "erections") {
+      // 1. Total delivered for this element at this site
+      const totalDeliveredQty = deliveries
+        .filter(d => d.siteId === siteId && d.elementCode.trim().toUpperCase() === code)
+        .reduce((sum, d) => sum + (d.quantity || 0), 0);
+
+      // 2. Total erected for this element at this site (excluding the current one being edited)
+      const totalOtherErectedQty = erections
+        .filter(er => er.siteId === siteId && er.elementCode.trim().toUpperCase() === code && er.id !== editingRecord.id)
+        .reduce((sum, er) => sum + (er.quantity || 0), 0);
+
+      const maxAllowed = totalDeliveredQty - totalOtherErectedQty;
+
+      if (targetQty > maxAllowed) {
+        setErrorBanner(`QUANTITY MISMATCH ALERT: For Element Code "${code}", you cannot set Erection quantity to ${targetQty}. Only ${Math.max(0, maxAllowed)} pcs are available to erect (Received: ${totalDeliveredQty} pcs, Already Erected: ${totalOtherErectedQty} pcs in other logs).`);
+        setUpdating(false);
+        return;
+      }
+    }
+
+    if (editingRecord.type === "deliveries") {
+      // 1. Total other delivered for this element at this site (excluding this one)
+      const totalOtherDeliveredQty = deliveries
+        .filter(d => d.siteId === siteId && d.elementCode.trim().toUpperCase() === code && d.id !== editingRecord.id)
+        .reduce((sum, d) => sum + (d.quantity || 0), 0);
+
+      // 2. Total erected for this element at this site
+      const totalErectedQty = erections
+        .filter(er => er.siteId === siteId && er.elementCode.trim().toUpperCase() === code)
+        .reduce((sum, er) => sum + (er.quantity || 0), 0);
+
+      const totalDeliveredWithNewValue = totalOtherDeliveredQty + targetQty;
+
+      if (totalDeliveredWithNewValue < totalErectedQty) {
+        setErrorBanner(`QUANTITY MISMATCH ALERT: Reducing Delivery quantity for "${code}" to ${targetQty} is forbidden. Total erection quantity is already ${totalErectedQty} pcs, but this change would result in only ${totalDeliveredWithNewValue} pcs received total.`);
+        setUpdating(false);
+        return;
+      }
+    }
+
     try {
       const docRef = doc(db, editingRecord.type, editingRecord.id);
       
       const updatedPayload = {
         ...editingRecord.data,
         weight: Number(editingRecord.data.weight),
-        quantity: Number(editingRecord.data.quantity),
-        totalWeight: Number(editingRecord.data.weight) * Number(editingRecord.data.quantity),
+        quantity: targetQty,
+        totalWeight: Number(editingRecord.data.weight) * targetQty,
         updatedAt: new Date().toISOString()
       };
 
@@ -401,6 +445,12 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
             </h3>
 
             <form onSubmit={handleUpdate} className="space-y-4 text-xs">
+              {errorBanner && (
+                <div className="p-3 text-xs text-rose-200 bg-rose-500/15 border border-rose-500/25 rounded-xl flex items-start gap-1.5 animate-fade-in">
+                  <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span className="font-semibold leading-relaxed">{errorBanner}</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 {editingRecord.type === "deliveries" && (
                   <>

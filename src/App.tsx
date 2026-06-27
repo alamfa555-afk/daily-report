@@ -856,6 +856,7 @@ export default function App() {
                       suggestions={mergedSuggestionsMap}
                       lastErection={lastErection}
                       deliveries={deliveries}
+                      erections={erections}
                       employeeNameMap={employeeNameMap}
                       onSuccess={() => console.log("Erection logged successfully")}
                     />

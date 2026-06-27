@@ -23,6 +23,7 @@ interface ErectionFormProps {
   onSuccess: () => void;
   lastErection: Erection | null;
   deliveries: Delivery[];
+  erections: Erection[];
   employeeNameMap: Record<string, string>;
 }
 
@@ -34,6 +35,7 @@ export default function ErectionForm({
   onSuccess,
   lastErection,
   deliveries = [],
+  erections = [],
   employeeNameMap
 }: ErectionFormProps) {
   const [loading, setLoading] = useState(false);
@@ -286,6 +288,37 @@ export default function ErectionForm({
       }
       if (!item.quantity || Number(item.quantity) <= 0) {
         setErrorList(`Quantity for ${itemIndexLabel} must be 1 or higher.`);
+        return;
+      }
+    }
+
+    // Validate overall quantity sums across deliveries and erections to prevent balance mismatches
+    // Group new form items by elementCode to support multiple rows of the same code in a single submission
+    const newItemsMap: Record<string, number> = {};
+    for (const item of items) {
+      const code = item.elementCode.trim().toUpperCase();
+      const qty = Number(item.quantity) || 0;
+      newItemsMap[code] = (newItemsMap[code] || 0) + qty;
+    }
+
+    // Validate each unique element code in this submission
+    for (const [code, newQtySum] of Object.entries(newItemsMap)) {
+      // Find total delivered quantity of this element code at this site
+      const totalDeliveredQty = deliveries
+        .filter(d => d.siteId === selectedSite.id && d.elementCode.trim().toUpperCase() === code)
+        .reduce((sum, d) => sum + (d.quantity || 0), 0);
+
+      // Find total already erected quantity of this element code at this site
+      const totalErectedQty = erections
+        .filter(er => er.siteId === selectedSite.id && er.elementCode.trim().toUpperCase() === code)
+        .reduce((sum, er) => sum + (er.quantity || 0), 0);
+
+      const maxAllowed = totalDeliveredQty - totalErectedQty;
+
+      if (newQtySum > maxAllowed) {
+        setErrorList(
+          `QUANTITY MISMATCH ALERT: For Element Code "${code}", you are trying to submit ${newQtySum} pcs for erection, but only ${Math.max(0, maxAllowed)} pcs are available on this site (Received: ${totalDeliveredQty} pcs, Already Erected: ${totalErectedQty} pcs). Erection quantity cannot exceed received quantity.`
+        );
         return;
       }
     }
