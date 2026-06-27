@@ -16,7 +16,7 @@ import {
   Sparkles,
   Info
 } from "lucide-react";
-import { motion } from "motion/react";
+
 
 interface PerformanceChartsProps {
   sites: Site[];
@@ -543,9 +543,9 @@ export default function PerformanceCharts({
                       const y = 20 + (1 - p) * 200;
                       const labelValue = Math.round(p * trendMaxVal);
                       return (
-                        <g key={idx} className="opacity-40">
-                          <line x1="45" y1={y} x2="520" y2={y} stroke="#334155" strokeDasharray="3 3" strokeWidth="0.5" />
-                          <text x="35" y={y + 3} fill="#94a3b8" fontSize="8.5" fontWeight="bold" fontFamily="monospace" textAnchor="end">
+                        <g key={idx}>
+                          <line x1="45" y1={y} x2="520" y2={y} stroke="#334155" strokeDasharray="3 3" strokeWidth="0.5" className="opacity-40" />
+                          <text x="35" y={y + 3} fill="#ffffff" fontSize="9" fontWeight="bold" fontFamily="monospace" textAnchor="end">
                             {labelValue}
                           </text>
                         </g>
@@ -572,33 +572,29 @@ export default function PerformanceCharts({
                       return (
                         <g key={idx}>
                           {/* Received Bar (Blue) */}
-                          <motion.rect
-                            initial={{ height: 0, y: 220 }}
-                            animate={{ height: recHeight, y: recY }}
-                            transition={{ duration: 0.6, delay: idx * 0.04 }}
+                          <rect
                             x={x}
                             y={recY}
                             width={barWidth}
                             height={recHeight}
                             fill="url(#blueGrad)"
                             rx="2"
-                            className="cursor-pointer hover:brightness-125 transition-all"
+                            className="cursor-pointer hover:brightness-125 transition-all duration-300 ease-out"
+                            style={{ transition: "height 0.3s ease-out, y 0.3s ease-out" }}
                             onMouseEnter={() => setHoveredTrendIndex(idx)}
                             onMouseLeave={() => setHoveredTrendIndex(null)}
                           />
 
                           {/* Erected Bar (Purple) */}
-                          <motion.rect
-                            initial={{ height: 0, y: 220 }}
-                            animate={{ height: ereHeight, y: ereY }}
-                            transition={{ duration: 0.6, delay: (idx * 0.04) + 0.1 }}
+                          <rect
                             x={x + barWidth + 2}
                             y={ereY}
                             width={barWidth}
                             height={ereHeight}
                             fill="url(#purpleGrad)"
                             rx="2"
-                            className="cursor-pointer hover:brightness-125 transition-all"
+                            className="cursor-pointer hover:brightness-125 transition-all duration-300 ease-out"
+                            style={{ transition: "height 0.3s ease-out, y 0.3s ease-out" }}
                             onMouseEnter={() => setHoveredTrendIndex(idx)}
                             onMouseLeave={() => setHoveredTrendIndex(null)}
                           />
@@ -701,9 +697,9 @@ export default function PerformanceCharts({
                       const y = 20 + (1 - p) * 160;
                       const labelValue = Math.round(p * productMaxVal);
                       return (
-                        <g key={idx} className="opacity-40">
-                          <line x1="40" y1={y} x2="360" y2={y} stroke="#334155" strokeDasharray="3 3" strokeWidth="0.5" />
-                          <text x="32" y={y + 3} fill="#94a3b8" fontSize="8.5" fontWeight="bold" fontFamily="monospace" textAnchor="end">
+                        <g key={idx}>
+                          <line x1="40" y1={y} x2="360" y2={y} stroke="#334155" strokeDasharray="3 3" strokeWidth="0.5" className="opacity-40" />
+                          <text x="32" y={y + 3} fill="#ffffff" fontSize="9" fontWeight="bold" fontFamily="monospace" textAnchor="end">
                             {labelValue}
                           </text>
                         </g>
@@ -730,26 +726,21 @@ export default function PerformanceCharts({
                       return (
                         <g key={idx}>
                           {/* Received Bar (Solid Product Color) */}
-                          <motion.rect
-                            initial={{ height: 0, y: 180 }}
-                            animate={{ height: recHeight, y: recY }}
-                            transition={{ duration: 0.6, delay: idx * 0.04 }}
+                          <rect
                             x={x}
                             y={recY}
                             width={barWidth}
                             height={recHeight}
                             fill={prod.fill}
                             rx="1.5"
-                            className="cursor-pointer hover:brightness-125 transition-all"
+                            className="cursor-pointer hover:brightness-125 transition-all duration-300 ease-out"
+                            style={{ transition: "height 0.3s ease-out, y 0.3s ease-out" }}
                             onMouseEnter={() => setHoveredProductIndex(idx)}
                             onMouseLeave={() => setHoveredProductIndex(null)}
                           />
 
                           {/* Erected Bar (Slightly transparent Product Color) */}
-                          <motion.rect
-                            initial={{ height: 0, y: 180 }}
-                            animate={{ height: ereHeight, y: ereY }}
-                            transition={{ duration: 0.6, delay: (idx * 0.04) + 0.1 }}
+                          <rect
                             x={x + barWidth + 2}
                             y={ereY}
                             width={barWidth}
@@ -758,7 +749,8 @@ export default function PerformanceCharts({
                             stroke={prod.fill}
                             strokeWidth="0.75"
                             rx="1.5"
-                            className="cursor-pointer hover:brightness-125 transition-all"
+                            className="cursor-pointer hover:brightness-125 transition-all duration-300 ease-out"
+                            style={{ transition: "height 0.3s ease-out, y 0.3s ease-out" }}
                             onMouseEnter={() => setHoveredProductIndex(idx)}
                             onMouseLeave={() => setHoveredProductIndex(null)}
                           />
