@@ -75,6 +75,7 @@ export default function PerformanceCharts({
   const [timeRange, setTimeRange] = useState<"daily" | "weekly" | "monthly">("weekly");
   const [metricType, setMetricType] = useState<"pcs" | "tons">("pcs");
   const [showSiteDropdown, setShowSiteDropdown] = useState(false);
+  const [workWeekOffset, setWorkWeekOffset] = useState(0); // 0 for current week, -1 for last week, etc.
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Set default selected site on mount or when currentSite changes
@@ -87,6 +88,11 @@ export default function PerformanceCharts({
       setSearchSiteNo(sites[0].siteNo);
     }
   }, [currentSite, sites]);
+
+  // Reset week offset when selected site changes
+  useEffect(() => {
+    setWorkWeekOffset(0);
+  }, [selectedSite]);
 
   // Handle site input change and filter matching sites
   const matchedSites = useMemo(() => {
@@ -116,14 +122,40 @@ export default function PerformanceCharts({
     onSelectSite?.(site);
   };
 
-  // Helper: Get start of ISO Week (Monday)
-  const getStartOfWeek = (date: Date) => {
+  // Helper: Get YYYY-MM-DD in local time
+  const getLocalDateString = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Helper: Get start of Work Week (Saturday)
+  const getStartOfWorkWeek = (date: Date) => {
     const d = new Date(date);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
-    const monday = new Date(d.setDate(diff));
-    monday.setHours(0, 0, 0, 0);
-    return monday;
+    // Saturday is 6. We want to find Saturday.
+    // offsets from Saturday (6):
+    // Sat (6) -> 0
+    // Sun (0) -> -1
+    // Mon (1) -> -2
+    // Tue (2) -> -3
+    // Wed (3) -> -4
+    // Thu (4) -> -5
+    // Fri (5) -> -6
+    let offset = 0;
+    if (day === 6) offset = 0;
+    else if (day === 0) offset = -1;
+    else if (day === 1) offset = -2;
+    else if (day === 2) offset = -3;
+    else if (day === 3) offset = -4;
+    else if (day === 4) offset = -5;
+    else if (day === 5) offset = -6;
+
+    const sat = new Date(d);
+    sat.setDate(d.getDate() + offset);
+    sat.setHours(0, 0, 0, 0);
+    return sat;
   };
 
   // Calculations for Daily, Weekly, Monthly groupings
@@ -131,15 +163,20 @@ export default function PerformanceCharts({
     const rawDataMap: Record<string, { label: string; received: number; erected: number }> = {};
 
     if (timeRange === "daily") {
-      // Create past 10 active calendar slots or days
+      // Create the 6 workdays (Saturday to Thursday) of the selected work week
+      const baseDate = new Date();
+      baseDate.setDate(baseDate.getDate() + workWeekOffset * 7);
+      const sat = getStartOfWorkWeek(baseDate);
+
       const days: string[] = [];
-      for (let i = 9; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().split("T")[0];
+      const workDays = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(sat);
+        d.setDate(sat.getDate() + i);
+        const key = getLocalDateString(d);
         days.push(key);
         rawDataMap[key] = {
-          label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+          label: `${workDays[i]} (${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })})`,
           received: 0,
           erected: 0,
         };
@@ -147,7 +184,8 @@ export default function PerformanceCharts({
 
       deliveries.forEach((d) => {
         if (!d.createdAt) return;
-        const key = d.createdAt.split("T")[0];
+        const localDate = new Date(d.createdAt);
+        const key = getLocalDateString(localDate);
         if (rawDataMap[key]) {
           rawDataMap[key].received += metricType === "pcs" ? (d.quantity || 1) : (d.totalWeight || d.weight || 0);
         }
@@ -155,7 +193,8 @@ export default function PerformanceCharts({
 
       erections.forEach((e) => {
         if (!e.createdAt) return;
-        const key = e.createdAt.split("T")[0];
+        const localDate = new Date(e.createdAt);
+        const key = getLocalDateString(localDate);
         if (rawDataMap[key]) {
           rawDataMap[key].erected += metricType === "pcs" ? (e.quantity || 1) : (e.totalWeight || e.weight || 0);
         }
@@ -165,17 +204,17 @@ export default function PerformanceCharts({
     } 
     
     if (timeRange === "weekly") {
-      // Create past 6 weeks slots
+      // Create past 6 weeks slots aligned to Saturday
       const weekKeys: string[] = [];
       for (let i = 5; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i * 7);
-        const startOfWeek = getStartOfWeek(d);
-        const key = startOfWeek.toISOString().split("T")[0];
+        const startOfWeek = getStartOfWorkWeek(d);
+        const key = getLocalDateString(startOfWeek);
         weekKeys.push(key);
         
         rawDataMap[key] = {
-          label: `${startOfWeek.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+          label: `Wk of ${startOfWeek.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
           received: 0,
           erected: 0,
         };
@@ -184,18 +223,20 @@ export default function PerformanceCharts({
       deliveries.forEach((d) => {
         if (!d.createdAt) return;
         const dateObj = new Date(d.createdAt);
-        const start = getStartOfWeek(dateObj).toISOString().split("T")[0];
-        if (rawDataMap[start]) {
-          rawDataMap[start].received += metricType === "pcs" ? (d.quantity || 1) : (d.totalWeight || d.weight || 0);
+        const start = getStartOfWorkWeek(dateObj);
+        const startKey = getLocalDateString(start);
+        if (rawDataMap[startKey]) {
+          rawDataMap[startKey].received += metricType === "pcs" ? (d.quantity || 1) : (d.totalWeight || d.weight || 0);
         }
       });
 
       erections.forEach((e) => {
         if (!e.createdAt) return;
         const dateObj = new Date(e.createdAt);
-        const start = getStartOfWeek(dateObj).toISOString().split("T")[0];
-        if (rawDataMap[start]) {
-          rawDataMap[start].erected += metricType === "pcs" ? (e.quantity || 1) : (e.totalWeight || e.weight || 0);
+        const start = getStartOfWorkWeek(dateObj);
+        const startKey = getLocalDateString(start);
+        if (rawDataMap[startKey]) {
+          rawDataMap[startKey].erected += metricType === "pcs" ? (e.quantity || 1) : (e.totalWeight || e.weight || 0);
         }
       });
 
@@ -218,7 +259,8 @@ export default function PerformanceCharts({
 
     deliveries.forEach((d) => {
       if (!d.createdAt) return;
-      const key = d.createdAt.substring(0, 7); // "YYYY-MM"
+      const dateObj = new Date(d.createdAt);
+      const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
       if (rawDataMap[key]) {
         rawDataMap[key].received += metricType === "pcs" ? (d.quantity || 1) : (d.totalWeight || d.weight || 0);
       }
@@ -226,14 +268,15 @@ export default function PerformanceCharts({
 
     erections.forEach((e) => {
       if (!e.createdAt) return;
-      const key = e.createdAt.substring(0, 7); // "YYYY-MM"
+      const dateObj = new Date(e.createdAt);
+      const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
       if (rawDataMap[key]) {
         rawDataMap[key].erected += metricType === "pcs" ? (e.quantity || 1) : (e.totalWeight || e.weight || 0);
       }
     });
 
     return Object.values(rawDataMap);
-  }, [deliveries, erections, timeRange, metricType]);
+  }, [deliveries, erections, timeRange, metricType, workWeekOffset]);
 
   // Product Wise Calculations (colors matching elements as required)
   const productData = useMemo(() => {
@@ -473,11 +516,41 @@ export default function PerformanceCharts({
                   <Clock className="h-4 w-4 text-blue-400" />
                   Delivery & Erection Activity Trend
                 </h3>
-                <p className="text-[10px] text-slate-400 font-medium">Comparison timeline of precast elements</p>
+                <p className="text-[10px] text-slate-400 font-medium">Comparison timeline of precast elements (Saturday to Thursday, Friday holiday)</p>
               </div>
 
               {/* Sub controls: metric type (PCS vs Tons) and Interval Toggle */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Week Navigation (Only in Daily/Sat-Thu view) */}
+                {timeRange === "daily" && (
+                  <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800 items-center">
+                    <button
+                      type="button"
+                      onClick={() => setWorkWeekOffset(prev => prev - 1)}
+                      className="px-2 py-1 text-xs font-black text-slate-400 hover:text-white cursor-pointer transition-colors"
+                      title="Previous Week"
+                    >
+                      ←
+                    </button>
+                    <span className="text-[9px] font-black uppercase text-slate-300 tracking-wider select-none bg-slate-950/40 rounded py-0.5 px-2 border border-slate-800">
+                      {workWeekOffset === 0 ? "Current Week" : `Week ${workWeekOffset}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setWorkWeekOffset(prev => Math.min(0, prev + 1))}
+                      disabled={workWeekOffset === 0}
+                      className={`px-2 py-1 text-xs font-black transition-colors ${
+                        workWeekOffset === 0
+                          ? "text-slate-600 cursor-not-allowed opacity-50"
+                          : "text-slate-400 hover:text-white cursor-pointer"
+                      }`}
+                      title="Next Week"
+                    >
+                      →
+                    </button>
+                  </div>
+                )}
+
                 {/* Metric Toggle */}
                 <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800">
                   <button
