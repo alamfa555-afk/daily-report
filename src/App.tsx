@@ -43,6 +43,7 @@ import {
   signOut, 
   onAuthStateChanged,
   updateProfile,
+  signInAnonymously,
   User as FirebaseUser
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
@@ -72,6 +73,9 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   // Auth fields
+  const [authMethodTab, setAuthMethodTab] = useState<"google" | "admin">("admin");
+  const [adminPasscodeInputLogin, setAdminPasscodeInputLogin] = useState("");
+  const [adminNameInputLogin, setAdminNameInputLogin] = useState("Admin ARA");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authDisplayName, setAuthDisplayName] = useState("");
@@ -199,6 +203,52 @@ export default function App() {
       setActivationCodeError("Failed to verify access code: " + err.message);
     } finally {
       setVerifyingActivationCode(false);
+    }
+  };
+
+  const handleAdminPasscodeSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminPasscodeInputLogin.trim()) return;
+    setAuthLoading(true);
+    setAuthError(null);
+    setAuthSuccess(null);
+    try {
+      const codeSnap = await getDoc(doc(db, "config", "security"));
+      const actualCode = codeSnap.exists() ? codeSnap.data()?.accessCode || "ARA2026" : "ARA2026";
+      
+      if (adminPasscodeInputLogin.trim() === actualCode) {
+        // Correct passcode! Perform anonymous sign-in
+        const userCredential = await signInAnonymously(auth);
+        const user = userCredential.user;
+        
+        // Create an Admin profile for this session/user in Firestore!
+        const userRef = doc(db, "users", user.uid);
+        const adminProfile: UserProfile = {
+          uid: user.uid,
+          email: "alamfa555@gmail.com",
+          displayName: adminNameInputLogin.trim() || "Admin ARA",
+          role: "admin",
+          assignedSiteIds: [],
+          status: "approved",
+          createdAt: new Date().toISOString()
+        };
+        
+        await setDoc(userRef, adminProfile);
+        setAuthSuccess("Logged in successfully as Admin!");
+        
+        setTimeout(() => {
+          setShowAuthModal(false);
+          setAuthSuccess(null);
+          setAdminPasscodeInputLogin("");
+        }, 1200);
+      } else {
+        setAuthError("Incorrect Admin Access Code. Please enter the correct code to gain Admin access.");
+      }
+    } catch (err: any) {
+      console.error("Admin passcode sign in error:", err);
+      setAuthError("Failed to log in: " + err.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -1617,8 +1667,47 @@ export default function App() {
                   ARA Site Access Login
                 </h3>
                 <p className="text-[11px] text-slate-400 font-medium font-sans leading-relaxed">
-                  We use secure Google Sign-In (Gmail) for verification. Click the button below to connect.
+                  Select your sign-in method below to access the Precast Delivery & Erection Control Center.
                 </p>
+              </div>
+
+              {/* Login Method Tabs */}
+              <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethodTab("admin");
+                    setAuthError(null);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    authMethodTab === "admin"
+                      ? "bg-indigo-600 text-white shadow-md"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Key className="h-3.5 w-3.5" />
+                  Admin Passcode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethodTab("google");
+                    setAuthError(null);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    authMethodTab === "google"
+                      ? "bg-indigo-600 text-white shadow-md"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <svg className="h-3 w-3 fill-current" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                  Google Login
+                </button>
               </div>
 
               {authError && (
@@ -1635,25 +1724,76 @@ export default function App() {
                 </div>
               )}
 
-              {/* Google Sign-In Button */}
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={authLoading}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold uppercase tracking-wider text-xs rounded-xl cursor-pointer shadow-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-2.5 border border-indigo-500"
-              >
-                {authLoading ? (
-                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
-                ) : (
-                  <svg className="h-4 w-4 fill-current text-white" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                )}
-                Continue with Google
-              </button>
+              {authMethodTab === "admin" ? (
+                /* Admin Passcode Form */
+                <form onSubmit={handleAdminPasscodeSignIn} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Admin / Supervisor Name</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. alamfa555"
+                        value={adminNameInputLogin}
+                        onChange={(e) => setAdminNameInputLogin(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Admin Access Passcode</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="password"
+                        required
+                        placeholder="Enter the Admin Access Code..."
+                        value={adminPasscodeInputLogin}
+                        onChange={(e) => setAdminPasscodeInputLogin(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-colors font-mono font-bold tracking-wider"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold uppercase tracking-wider text-xs rounded-xl cursor-pointer shadow-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 border border-indigo-500"
+                  >
+                    {authLoading && (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    )}
+                    Unlock Admin Access
+                  </button>
+                </form>
+              ) : (
+                /* Google Sign-In Button */
+                <div className="space-y-3">
+                  <p className="text-[10px] text-slate-400 leading-relaxed text-center">
+                    Gmail Sign-In for operators. Registered users can enter the activation code once signed in.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={authLoading}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold uppercase tracking-wider text-xs rounded-xl cursor-pointer shadow-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-2.5 border border-indigo-500"
+                  >
+                    {authLoading ? (
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                    ) : (
+                      <svg className="h-4 w-4 fill-current text-white" viewBox="0 0 24 24">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                      </svg>
+                    )}
+                    Continue with Google
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
