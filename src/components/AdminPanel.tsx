@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, onSnapshot, doc, updateDoc, deleteDoc } from "../lib/firebase";
+import { db, collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc } from "../lib/firebase";
 import { UserProfile, Site } from "../types";
-import { Shield, UserCheck, ShieldAlert, Check, X, Building2, Trash2, ShieldCheck, UserMinus } from "lucide-react";
+import { Shield, UserCheck, ShieldAlert, Check, X, Building2, Trash2, ShieldCheck, UserMinus, Lock, Key } from "lucide-react";
 
 interface AdminPanelProps {
   sites: Site[];
@@ -12,6 +12,48 @@ export default function AdminPanel({ sites, currentUserProfile }: AdminPanelProp
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Access control state
+  const [accessCode, setAccessCode] = useState("ARA2026");
+  const [inputCode, setInputCode] = useState("");
+  const [isUpdatingCode, setIsUpdatingCode] = useState(false);
+  const [codeSuccessMessage, setCodeSuccessMessage] = useState("");
+
+  // Fetch access code
+  useEffect(() => {
+    const codeRef = doc(db, "config", "security");
+    const unsub = onSnapshot(codeRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.accessCode) {
+          setAccessCode(data.accessCode);
+          setInputCode(data.accessCode);
+        }
+      } else {
+        // If it doesn't exist, initialize default
+        setDoc(codeRef, { accessCode: "ARA2026" }).catch(console.error);
+        setInputCode("ARA2026");
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSaveAccessCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCode.trim()) return;
+    setIsUpdatingCode(true);
+    setCodeSuccessMessage("");
+    try {
+      await setDoc(doc(db, "config", "security"), { accessCode: inputCode.trim() });
+      setCodeSuccessMessage("Access code updated successfully!");
+      setTimeout(() => setCodeSuccessMessage(""), 3000);
+    } catch (err: any) {
+      console.error("Error updating access code:", err);
+      alert("Error saving access code: " + err.message);
+    } finally {
+      setIsUpdatingCode(false);
+    }
+  };
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
@@ -126,6 +168,44 @@ export default function AdminPanel({ sites, currentUserProfile }: AdminPanelProp
           />
         </div>
       </div>
+
+      {/* Access Code Settings */}
+      <div className="bg-slate-950/40 border border-indigo-500/35 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-xs font-black uppercase text-indigo-300 tracking-wider flex items-center gap-1.5">
+            <Lock className="h-4 w-4" /> Google Sign-In Access Control
+          </h3>
+          <p className="text-[11px] text-slate-400">
+            Define a secure code. When new operators sign in with Google, they must enter this code to instantly activate their account.
+          </p>
+        </div>
+        
+        <form onSubmit={handleSaveAccessCode} className="flex gap-2 w-full md:w-auto shrink-0">
+          <div className="relative w-full md:w-48">
+            <Key className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+            <input
+              type="text"
+              required
+              placeholder="e.g. ARA2026"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-850 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono tracking-wider font-bold"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isUpdatingCode}
+            className="cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+          >
+            {isUpdatingCode ? "Saving..." : "Set Code"}
+          </button>
+        </form>
+      </div>
+      {codeSuccessMessage && (
+        <div className="text-[11px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5 rounded-lg animate-fade-in">
+          ✓ {codeSuccessMessage}
+        </div>
+      )}
 
       {/* Grid of users */}
       <div className="grid grid-cols-1 gap-4">

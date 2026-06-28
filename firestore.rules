@@ -31,14 +31,21 @@ service cloud.firestore {
     }
 
     // users collection:
-    // - Anyone authenticated can read their own profile or write to create their own initial profile (when status is pending)
+    // - Anyone authenticated can read, create, or update their own profile (to allow self-registration and activation via access code)
     // - Admins can read and write all profiles
     match /users/{userId} {
       allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow create: if request.auth != null && request.auth.uid == userId && 
-        request.resource.data.role == 'operator' && 
-        request.resource.data.status == 'pending';
-      allow update, delete: if isAdmin() || (request.auth != null && request.auth.uid == userId && request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status && request.resource.data.assignedSiteIds == resource.data.assignedSiteIds);
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // config collection:
+    // - Anyone can read the security configuration (to check the access code)
+    // - Only admins can write/update security configuration
+    match /config/security {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // sites collection:
