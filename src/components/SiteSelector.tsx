@@ -10,6 +10,7 @@ interface SiteSelectorProps {
   loading: boolean;
   selectedDate: string;
   onSelectedDateChange: (date: string) => void;
+  isAdmin?: boolean;
 }
 
 export default function SiteSelector({
@@ -18,7 +19,8 @@ export default function SiteSelector({
   onSelectSite,
   loading,
   selectedDate,
-  onSelectedDateChange
+  onSelectedDateChange,
+  isAdmin = false
 }: SiteSelectorProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSiteNo, setNewSiteNo] = useState("");
@@ -172,23 +174,25 @@ export default function SiteSelector({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddForm(!showAddForm);
-                  setShowEditForm(false);
-                  setConfirmDelete(false);
-                  setError(null);
-                }}
-                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer text-white ${
-                  showAddForm ? "bg-slate-750 hover:bg-slate-700" : "bg-blue-600 hover:bg-blue-500"
-                }`}
-              >
-                {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                <span>{showAddForm ? "Close" : "Add Site"}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddForm(!showAddForm);
+                    setShowEditForm(false);
+                    setConfirmDelete(false);
+                    setError(null);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer text-white ${
+                    showAddForm ? "bg-slate-750 hover:bg-slate-700" : "bg-blue-600 hover:bg-blue-500"
+                  }`}
+                >
+                  {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                  <span>{showAddForm ? "Close" : "Add Site"}</span>
+                </button>
+              )}
 
-              {selectedSite && !confirmDelete && (
+              {isAdmin && selectedSite && !confirmDelete && (
                 <>
                   <button
                     type="button"
@@ -226,7 +230,7 @@ export default function SiteSelector({
                 </>
               )}
 
-              {selectedSite && confirmDelete && (
+              {isAdmin && selectedSite && confirmDelete && (
                 <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-500/30 rounded-lg px-2.5 py-1 text-xs">
                   <span className="text-rose-200 font-bold text-[10px]">Delete No. {selectedSite.siteNo}?</span>
                   <button

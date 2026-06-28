@@ -25,6 +25,7 @@ interface ErectionFormProps {
   deliveries: Delivery[];
   erections: Erection[];
   employeeNameMap: Record<string, string>;
+  readOnly?: boolean;
 }
 
 export default function ErectionForm({
@@ -36,7 +37,8 @@ export default function ErectionForm({
   lastErection,
   deliveries = [],
   erections = [],
-  employeeNameMap
+  employeeNameMap,
+  readOnly = false
 }: ErectionFormProps) {
   const [loading, setLoading] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
@@ -1046,11 +1048,18 @@ export default function ErectionForm({
         </div>
       )}
 
+      {readOnly && (
+        <div className="p-3.5 text-xs text-red-200 bg-red-500/15 border border-red-500/25 rounded-xl flex items-center gap-2 animate-fade-in mt-4">
+          <ShieldAlert className="h-4 w-4 text-red-400 shrink-0" />
+          <span className="font-semibold">⚠️ READ-ONLY MODE: You do not have permissions to modify data on this site. Please sign in or contact your Admin.</span>
+        </div>
+      )}
+
       <div className="flex gap-3 pt-2.5 border-t border-slate-900">
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={loading || !selectedSite}
+          disabled={loading || !selectedSite || readOnly}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-2 px-5 rounded-lg text-xs uppercase tracking-wider inline-flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95"
         >
           {loading ? (

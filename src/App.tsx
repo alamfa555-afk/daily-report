@@ -13,9 +13,16 @@ import {
   CheckCircle2,
   ShieldAlert,
   ShieldCheck,
-  Trash2
+  Trash2,
+  Lock,
+  Unlock,
+  User,
+  LogIn,
+  LogOut,
+  Key,
+  Users
 } from "lucide-react";
-import { Site, Delivery, Erection, Suggestion } from "./types";
+import { Site, Delivery, Erection, Suggestion, UserProfile } from "./types";
 import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, doc, deleteDoc, setDoc } from "./lib/firebase";
 import { DEFAULT_SUGGESTIONS } from "./lib/suggestions";
 import SiteSelector from "./components/SiteSelector";
@@ -27,6 +34,18 @@ import DataTable from "./components/DataTable";
 import SiteInventory from "./components/SiteInventory";
 import EquipmentInventory from "./components/EquipmentInventory";
 import PerformanceCharts from "./components/PerformanceCharts";
+import AdminPanel from "./components/AdminPanel";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  updateProfile,
+  User as FirebaseUser
+} from "firebase/auth";
+import { auth } from "./lib/firebase";
 
 export default function App() {
   // State managers
@@ -43,7 +62,22 @@ export default function App() {
   const [isCleaning, setIsCleaning] = useState<boolean>(false);
   
   const [activeFormTab, setActiveFormTab] = useState<"receive" | "erect">("receive");
-  const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory" | "equipment" | "charts">("logging");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"logging" | "logs" | "reports" | "inventory" | "equipment" | "charts" | "admin">("logging");
+
+  // Authentication and Role-Based states
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+
+  // Auth fields
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Dynamic filter for dashboard
   const filteredDeliveriesForDashboard = useMemo(() => {
@@ -63,9 +97,157 @@ export default function App() {
       return recordDate === selectedDateFilter;
     });
   }, [erections, selectedDateFilter]);
+
+  const isUserAdmin = useMemo(() => currentUserProfile?.role === "admin", [currentUserProfile]);
+  const isUserApprovedOperator = useMemo(() => currentUserProfile?.role === "operator" && currentUserProfile?.status === "approved", [currentUserProfile]);
+
+  const isSiteReadOnly = useMemo(() => {
+    if (!currentUserProfile) return true; // visitor -> read-only
+    if (isUserAdmin) return false;        // admin -> full access
+    if (isUserApprovedOperator && selectedSite) {
+      // operator -> write if assigned to site
+      return !currentUserProfile.assignedSiteIds.includes(selectedSite.id);
+    }
+    return true;                          // pending -> read-only
+  }, [currentUserProfile, isUserAdmin, isUserApprovedOperator, selectedSite]);
   
   // Loaders
   const [loadingSites, setLoadingSites] = useState(true);
+
+  // 0. Authentication Listener & Profile creation
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        const unsubProfile = onSnapshot(userRef, async (docSnap) => {
+          if (docSnap.exists()) {
+            setCurrentUserProfile(docSnap.data() as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email || "",
+              displayName: user.displayName || user.email?.split("@")[0] || "Operator",
+              role: "operator",
+              assignedSiteIds: [],
+              status: "pending",
+              createdAt: new Date().toISOString()
+            };
+            try {
+              await setDoc(userRef, newProfile);
+              setCurrentUserProfile(newProfile);
+            } catch (err) {
+              console.error("Error creating user profile in Firestore:", err);
+            }
+          }
+          setLoadingAuth(false);
+        }, (err) => {
+          console.error("Error listening to user profile:", err);
+          setLoadingAuth(false);
+        });
+        return () => unsubProfile();
+      } else {
+        setCurrentUserProfile(null);
+        setLoadingAuth(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword) {
+      setAuthError("Please fill in all credentials.");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      setAuthSuccess("Logged in successfully!");
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccess(null);
+        setAuthEmail("");
+        setAuthPassword("");
+      }, 1000);
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setAuthError(err.message || "Failed to log in. Please check your credentials.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword || !authDisplayName) {
+      setAuthError("All fields are required.");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+      const user = userCredential.user;
+      
+      await updateProfile(user, { displayName: authDisplayName });
+
+      const userRef = doc(db, "users", user.uid);
+      const newProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email || "",
+        displayName: authDisplayName,
+        role: "operator",
+        assignedSiteIds: [],
+        status: "pending",
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(userRef, newProfile);
+      
+      setAuthSuccess("Registration completed! Profile is pending Admin approval.");
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccess(null);
+        setAuthEmail("");
+        setAuthPassword("");
+        setAuthDisplayName("");
+      }, 2500);
+    } catch (err: any) {
+      console.error("Sign up error:", err);
+      setAuthError(err.message || "Failed to register account.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      setAuthSuccess("Google Sign-In successful!");
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccess(null);
+      }, 1000);
+    } catch (err: any) {
+      console.error("Google auth error:", err);
+      setAuthError(err.message || "Google Sign-In failed. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setActiveDashboardTab("logging");
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+  };
 
   // 1. Listen for project sites in real-time
   useEffect(() => {
@@ -694,15 +876,71 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Stats Indicators */}
-          <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-300 bg-slate-900/80 border border-slate-800 rounded-lg p-2 px-3 shadow-inner">
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Realtime Connected</span>
+          {/* Quick Stats & Authenticators Group */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Stats Indicators */}
+            <div className="hidden md:flex items-center gap-3 text-[10px] font-semibold text-slate-300 bg-slate-900/80 border border-slate-800 rounded-lg p-2 px-3 shadow-inner">
+              <div className="flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Realtime Connected</span>
+              </div>
+              <div className="h-3 w-px bg-slate-800"></div>
+              <div>
+                <span>Sites Registered: <span className="font-bold text-white">{sites.length}</span></span>
+              </div>
             </div>
-            <div className="h-3 w-px bg-slate-800"></div>
-            <div>
-              <span>Sites Registered: <span className="font-bold text-white">{sites.length}</span></span>
+
+            {/* Authenticated User Status */}
+            <div className="flex items-center gap-2">
+              {loadingAuth ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500"></div>
+              ) : !currentUserProfile ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-amber-500/15 text-amber-400 font-extrabold px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5 shadow-sm">
+                    <Unlock className="h-3 w-3" /> Visitor View (Read-Only)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signin");
+                      setShowAuthModal(true);
+                    }}
+                    className="cursor-pointer text-[10px] font-extrabold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg border border-indigo-500 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/10"
+                  >
+                    <LogIn className="h-3.5 w-3.5" /> Sign In
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 bg-slate-900/90 border border-slate-800 rounded-lg p-1.5 pl-2.5 shadow-xl">
+                  <div className="text-left">
+                    <p className="text-[10px] font-bold text-white leading-none mb-0.5">{currentUserProfile.displayName}</p>
+                    <div className="flex items-center gap-1">
+                      {currentUserProfile.role === "admin" ? (
+                        <span className="text-[8px] bg-rose-500/20 text-rose-300 font-extrabold px-1 rounded border border-rose-500/30 uppercase tracking-widest">
+                          Admin
+                        </span>
+                      ) : currentUserProfile.status === "approved" ? (
+                        <span className="text-[8px] bg-emerald-500/20 text-emerald-300 font-extrabold px-1 rounded border border-emerald-500/30 uppercase tracking-widest">
+                          Operator ({currentUserProfile.assignedSiteIds.length} Site)
+                        </span>
+                      ) : (
+                        <span className="text-[8px] bg-amber-500/20 text-amber-300 font-extrabold px-1 rounded border border-amber-500/30 uppercase tracking-widest animate-pulse">
+                          Pending Admin Approval
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="cursor-pointer p-1.5 bg-slate-950/80 border border-slate-800 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-md transition-all"
+                    title="Sign Out"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -717,6 +955,7 @@ export default function App() {
           loading={loadingSites}
           selectedDate={selectedDateFilter}
           onSelectedDateChange={setSelectedDateFilter}
+          isAdmin={isUserAdmin}
         />
       </div>
 
@@ -798,6 +1037,19 @@ export default function App() {
             >
               📈 PERFORMANCE CHARTS
             </button>
+            {isUserAdmin && (
+              <button
+                type="button"
+                onClick={() => setActiveDashboardTab("admin")}
+                className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  activeDashboardTab === "admin"
+                    ? "bg-rose-700 text-white shadow-lg shadow-rose-500/10"
+                    : "text-slate-400 hover:text-rose-400 hover:bg-slate-900/50"
+                }`}
+              >
+                🔑 USER MANAGEMENT
+              </button>
+            )}
           </div>
 
           {/* Conditional Rendering based on active dashboard tab */}
@@ -845,6 +1097,7 @@ export default function App() {
                       lastDelivery={lastDelivery}
                       employeeNameMap={employeeNameMap}
                       onSuccess={() => console.log("Received data logged successfully.")}
+                      readOnly={isSiteReadOnly}
                     />
                   </div>
                 ) : (
@@ -859,6 +1112,7 @@ export default function App() {
                       erections={erections}
                       employeeNameMap={employeeNameMap}
                       onSuccess={() => console.log("Erection logged successfully")}
+                      readOnly={isSiteReadOnly}
                     />
                   </div>
                 )}
@@ -1167,6 +1421,7 @@ export default function App() {
                 deliveries={filteredDeliveriesForDashboard}
                 erections={filteredErectionsForDashboard}
                 selectedSiteNo={selectedSite.siteNo}
+                readOnly={isSiteReadOnly}
               />
             </div>
           )}
@@ -1195,6 +1450,7 @@ export default function App() {
               <EquipmentInventory
                 sites={sites}
                 currentSite={selectedSite}
+                readOnly={isSiteReadOnly}
               />
             </div>
           )}
@@ -1207,6 +1463,15 @@ export default function App() {
                 deliveries={filteredDeliveriesForDashboard}
                 erections={filteredErectionsForDashboard}
                 onSelectSite={setSelectedSite}
+              />
+            </div>
+          )}
+
+          {activeDashboardTab === "admin" && isUserAdmin && (
+            <div className="animate-fade-in">
+              <AdminPanel
+                sites={sites}
+                currentUserProfile={currentUserProfile}
               />
             </div>
           )}
@@ -1235,6 +1500,166 @@ export default function App() {
         <p>© {new Date().getFullYear()} AL RASHID ABETONG (ARA) Precast Contractors • Riyadh, KSA</p>
         <p className="text-[10px] text-slate-500 mt-1">Unified Real-Time Quality Control System • Connected to Cloud Firestore DB</p>
       </footer>
+
+      {/* Auth Modal Overlay */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-fade-in">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setShowAuthModal(false);
+                setAuthError(null);
+                setAuthSuccess(null);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+            >
+              &times;
+            </button>
+
+            <div className="p-6 space-y-5">
+              <div className="text-center space-y-1">
+                <div className="mx-auto w-12 h-12 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3">
+                  <Lock className="h-6 w-6 animate-pulse" />
+                </div>
+                <h3 className="text-base font-black text-white uppercase tracking-wider">
+                  {authMode === "signin" ? "ARA Site Control Login" : "Operator Registration"}
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  {authMode === "signin" 
+                    ? "Sign in to log delivery MDR slips & erection progress." 
+                    : "Create a new site supervisor/operator profile."}
+                </p>
+              </div>
+
+              {authError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold leading-relaxed flex items-start gap-2 animate-pulse">
+                  <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{authError}</span>
+                </div>
+              )}
+
+              {authSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold leading-relaxed flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{authSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp} className="space-y-4">
+                {authMode === "signup" && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Supervisor Full Name</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Shamim Jamshed"
+                        value={authDisplayName}
+                        onChange={(e) => setAuthDisplayName(e.target.value)}
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Company Email Address</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="name@alrashidabetong.com"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Secure Password</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold uppercase tracking-wider text-xs rounded-xl cursor-pointer shadow-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {authLoading && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  )}
+                  {authMode === "signin" ? "Sign In Securely" : "Register Operator Profile"}
+                </button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-800"></div>
+                <span className="flex-shrink mx-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Or login with</span>
+                <div className="flex-grow border-t border-slate-800"></div>
+              </div>
+
+              {/* Google login */}
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={authLoading}
+                className="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl hover:bg-slate-900 transition-colors flex items-center justify-center gap-2 text-xs font-bold text-slate-300 cursor-pointer disabled:opacity-50"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
+                </svg>
+                Google Authenticator
+              </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode(authMode === "signin" ? "signup" : "signin");
+                    setAuthError(null);
+                    setAuthSuccess(null);
+                  }}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer underline"
+                >
+                  {authMode === "signin" 
+                    ? "Don't have an operator profile? Register here" 
+                    : "Already registered? Login to your profile"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

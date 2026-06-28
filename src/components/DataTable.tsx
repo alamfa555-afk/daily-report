@@ -7,9 +7,10 @@ interface DataTableProps {
   deliveries: Delivery[];
   erections: Erection[];
   selectedSiteNo: string;
+  readOnly?: boolean;
 }
 
-export default function DataTable({ deliveries = [], erections = [], selectedSiteNo }: DataTableProps) {
+export default function DataTable({ deliveries = [], erections = [], selectedSiteNo, readOnly = false }: DataTableProps) {
   const [activeTab, setActiveTab] = useState<"deliveries" | "erections">("deliveries");
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -275,50 +276,54 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                       {new Date(d.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <div className="inline-flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(d, "deliveries")}
-                          className="p-1 px-2.5 text-slate-400 hover:text-blue-400 hover:bg-blue-600/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
-                          title="Edit delivery"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                          <span>Edit</span>
-                        </button>
-                        {confirmDeleteId === d.id ? (
-                          <div className="inline-flex items-center gap-1.5 bg-rose-950/40 border border-rose-900/30 p-1 rounded-lg animate-fade-in text-rose-300">
-                            <span className="text-[10px] text-rose-300 font-bold px-1 select-none">Sure?</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setConfirmDeleteId(null);
-                                handleDelete(d.id, "deliveries");
-                              }}
-                              className="p-1 px-2 text-rose-350 bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-[10px] font-bold rounded cursor-pointer transition-colors"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="p-1 px-2 text-slate-300 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
-                            >
-                              No
-                            </button>
-                          </div>
-                        ) : (
+                      {readOnly ? (
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider italic select-none">Read-only</span>
+                      ) : (
+                        <div className="inline-flex gap-1.5">
                           <button
                             type="button"
-                            disabled={deletingId === d.id}
-                            onClick={() => setConfirmDeleteId(d.id)}
-                            className="p-1 px-2.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
-                            title="Delete delivery"
+                            onClick={() => handleEditClick(d, "deliveries")}
+                            className="p-1 px-2.5 text-slate-400 hover:text-blue-400 hover:bg-blue-600/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                            title="Edit delivery"
                           >
-                            {deletingId === d.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                            <span>Delete</span>
+                            <Edit3 className="h-3 w-3" />
+                            <span>Edit</span>
                           </button>
-                        )}
-                      </div>
+                          {confirmDeleteId === d.id ? (
+                            <div className="inline-flex items-center gap-1.5 bg-rose-950/40 border border-rose-900/30 p-1 rounded-lg animate-fade-in text-rose-300">
+                              <span className="text-[10px] text-rose-300 font-bold px-1 select-none">Sure?</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDeleteId(null);
+                                  handleDelete(d.id, "deliveries");
+                                }}
+                                className="p-1 px-2 text-rose-350 bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                              >
+                                  Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="p-1 px-2 text-slate-300 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                              >
+                                  No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={deletingId === d.id}
+                              onClick={() => setConfirmDeleteId(d.id)}
+                              className="p-1 px-2.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                              title="Delete delivery"
+                            >
+                              {deletingId === d.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -376,50 +381,54 @@ export default function DataTable({ deliveries = [], erections = [], selectedSit
                       {new Date(e.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <div className="inline-flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(e, "erections")}
-                          className="p-1 px-2.5 text-slate-400 hover:text-purple-400 hover:bg-purple-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
-                          title="Edit Erection"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                          <span>Edit</span>
-                        </button>
-                        {confirmDeleteId === e.id ? (
-                          <div className="inline-flex items-center gap-1.5 bg-rose-955/40 border border-rose-900/30 p-1 rounded-lg animate-fade-in text-rose-300">
-                            <span className="text-[10px] text-rose-300 font-bold px-1 select-none">Sure?</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setConfirmDeleteId(null);
-                                handleDelete(e.id, "erections");
-                              }}
-                              className="p-1 px-2 text-rose-350 bg-rose-500/20 hover:bg-rose-505/35 border border-rose-500/30 text-[10px] font-bold rounded cursor-pointer transition-colors"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="p-1 px-2 text-slate-300 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
-                            >
-                              No
-                            </button>
-                          </div>
-                        ) : (
+                      {readOnly ? (
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider italic select-none">Read-only</span>
+                      ) : (
+                        <div className="inline-flex gap-1.5">
                           <button
                             type="button"
-                            disabled={deletingId === e.id}
-                            onClick={() => setConfirmDeleteId(e.id)}
-                            className="p-1 px-2.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
-                            title="Delete Erection"
+                            onClick={() => handleEditClick(e, "erections")}
+                            className="p-1 px-2.5 text-slate-400 hover:text-purple-400 hover:bg-purple-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                            title="Edit Erection"
                           >
-                            {deletingId === e.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                            <span>Delete</span>
+                            <Edit3 className="h-3 w-3" />
+                            <span>Edit</span>
                           </button>
-                        )}
-                      </div>
+                          {confirmDeleteId === e.id ? (
+                            <div className="inline-flex items-center gap-1.5 bg-rose-955/40 border border-rose-900/30 p-1 rounded-lg animate-fade-in text-rose-300">
+                              <span className="text-[10px] text-rose-300 font-bold px-1 select-none">Sure?</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDeleteId(null);
+                                  handleDelete(e.id, "erections");
+                                }}
+                                className="p-1 px-2 text-rose-350 bg-rose-500/20 hover:bg-rose-505/35 border border-rose-500/30 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="p-1 px-2 text-slate-300 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={deletingId === e.id}
+                              onClick={() => setConfirmDeleteId(e.id)}
+                              className="p-1 px-2.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                              title="Delete Erection"
+                            >
+                              {deletingId === e.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))

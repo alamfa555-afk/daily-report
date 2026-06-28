@@ -145,6 +145,7 @@ const drawARALogo = (doc: any, x: number, y: number, width: number, height: numb
 interface EquipmentInventoryProps {
   sites: Site[];
   currentSite: Site | null;
+  readOnly?: boolean;
 }
 
 const EQUIPMENT_TYPES = [
@@ -156,7 +157,7 @@ const EQUIPMENT_TYPES = [
   "Boom Truck"
 ];
 
-export default function EquipmentInventory({ sites, currentSite }: EquipmentInventoryProps) {
+export default function EquipmentInventory({ sites, currentSite, readOnly = false }: EquipmentInventoryProps) {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
@@ -851,28 +852,32 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Main Action buttons */}
-          <button
-            onClick={() => handleAutoSyncCranes(false)}
-            disabled={syncing}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none hover:scale-[1.01]"
-            title="Automatically scan all deliveries & erections reports to fetch and list logged cranes"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Scanning..." : "Sync from Site Logs"}
-          </button>
+          {!readOnly && (
+            <>
+              <button
+                onClick={() => handleAutoSyncCranes(false)}
+                disabled={syncing}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none hover:scale-[1.01]"
+                title="Automatically scan all deliveries & erections reports to fetch and list logged cranes"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Scanning..." : "Sync from Site Logs"}
+              </button>
 
-          <button
-            onClick={() => {
-              if (showAddForm && editingId) {
-                resetForm();
-              }
-              setShowAddForm(!showAddForm);
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all hover:scale-[1.01]"
-          >
-            {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-            {showAddForm ? "Cancel Form" : "Log New Equipment"}
-          </button>
+              <button
+                onClick={() => {
+                  if (showAddForm && editingId) {
+                    resetForm();
+                  }
+                  setShowAddForm(!showAddForm);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider inline-flex items-center gap-1.5 shadow cursor-pointer transition-all hover:scale-[1.01]"
+              >
+                {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {showAddForm ? "Cancel Form" : "Log New Equipment"}
+              </button>
+            </>
+          )}
           
           <button
             onClick={handleDownloadCSV}
@@ -1172,22 +1177,26 @@ export default function EquipmentInventory({ sites, currentSite }: EquipmentInve
                           )}
                         </td>
                         <td className="p-3 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleEditClick(eq)}
-                              className="p-1 bg-slate-900 hover:bg-blue-600/20 text-slate-400 hover:text-blue-300 border border-slate-800 rounded transition-all cursor-pointer"
-                              title="Edit Equipment Record"
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(eq.id)}
-                              className="p-1 bg-slate-900 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 border border-slate-800 rounded transition-all cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
+                          {readOnly ? (
+                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider italic select-none">Read-only</span>
+                          ) : (
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => handleEditClick(eq)}
+                                className="p-1 bg-slate-900 hover:bg-blue-600/20 text-slate-400 hover:text-blue-300 border border-slate-800 rounded transition-all cursor-pointer"
+                                title="Edit Equipment Record"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(eq.id)}
+                                className="p-1 bg-slate-900 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 border border-slate-800 rounded transition-all cursor-pointer"
+                                title="Delete Record"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

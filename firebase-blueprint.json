@@ -118,6 +118,24 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "siteId", "siteNo", "equipmentType", "plateNo", "capacity", "status", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Represents a user profile with role-based access control and assigned sites",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "operator"] },
+        "assignedSiteIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "assignedSiteIds", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -140,6 +158,10 @@
     "equipment/{equipmentId}": {
       "schema": "Equipment",
       "description": "Tracks cranes and heavy equipments rented or ARA with plate numbers and capacities"
+    },
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles containing roles and site assignments"
     }
   }
 }

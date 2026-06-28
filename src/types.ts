@@ -100,6 +100,16 @@ export interface Equipment {
   updatedAt: string;
 }
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: 'admin' | 'operator';
+  assignedSiteIds: string[];
+  status: 'pending' | 'approved';
+  createdAt: string;
+}
+
 export const ALLOWED_EMPLOYEES: Record<string, string> = {};
 
 
