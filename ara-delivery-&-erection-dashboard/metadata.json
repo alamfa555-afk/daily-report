@@ -1,0 +1,6 @@
+{
+  "name": "ARA Delivery & Erection Dashboard",
+  "description": "Real-time Site Delivery Receiving and Erection Reporting Dashboard with PDF/CSV export and persistent fields auto-saving for AL RASHID ABETONG Precast.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

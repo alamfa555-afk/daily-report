@@ -1,0 +1,167 @@
+{
+  "entities": {
+    "Site": {
+      "title": "Site",
+      "description": "Represents a precast construction project site number and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique site ID" },
+        "name": { "type": "string", "description": "Name of the site" },
+        "siteNo": { "type": "string", "description": "Site number as text" },
+        "projectManager": { "type": "string", "description": "Name of the Project Manager" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "siteNo", "createdAt"]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Precast delivery element received report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteId": { "type": "string" },
+        "mdrNo": { "type": "string" },
+        "elementCode": { "type": "string" },
+        "elementType": { "type": "string" },
+        "weight": { "type": "number" },
+        "quantity": { "type": "number" },
+        "totalWeight": { "type": "number" },
+        "status": { "type": "string", "enum": ["good", "damage", "reject"] },
+        "zone": { "type": "string" },
+        "villaType": { "type": "string" },
+        "buildingNo": { "type": "string" },
+        "houseNo": { "type": "string" },
+        "flatNo": { "type": "string" },
+        "unloadingDetails": {
+          "type": "object",
+          "properties": {
+            "unloaderId": { "type": "string" },
+            "unloaderName": { "type": "string" },
+            "unloaderTitle": { "type": "string" },
+            "equipmentType": { "type": "string", "enum": ["mobile crane", "crawler crane", "forklift", "manlift"] },
+            "capacity": { "type": "number" },
+            "equipmentPlateNo": { "type": "string" },
+            "operatorName": { "type": "string" },
+            "operatorId": { "type": "string" }
+          }
+        },
+        "recordedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "siteId", "mdrNo", "elementCode", "elementType", "weight", "quantity", "totalWeight", "status", "recordedBy", "createdAt"]
+    },
+    "Erection": {
+      "title": "Erection",
+      "description": "Precast element erection progress entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteId": { "type": "string" },
+        "elementCode": { "type": "string" },
+        "elementType": { "type": "string" },
+        "weight": { "type": "number" },
+        "quantity": { "type": "number" },
+        "totalWeight": { "type": "number" },
+        "status": { "type": "string", "enum": ["good", "damage", "reject"] },
+        "zone": { "type": "string" },
+        "villaType": { "type": "string" },
+        "buildingNo": { "type": "string" },
+        "houseNo": { "type": "string" },
+        "flatNo": { "type": "string" },
+        "erectionDetails": {
+          "type": "object",
+          "properties": {
+            "erectorId": { "type": "string" },
+            "erectorName": { "type": "string" },
+            "erectorTitle": { "type": "string" },
+            "equipmentType": { "type": "string", "enum": ["mobile crane", "crawler crane", "forklift", "manlift"] },
+            "capacity": { "type": "number" },
+            "equipmentPlateNo": { "type": "string" },
+            "operatorName": { "type": "string" },
+            "operatorId": { "type": "string" }
+          }
+        },
+        "recordedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "siteId", "elementCode", "elementType", "weight", "quantity", "totalWeight", "status", "recordedBy", "createdAt"]
+    },
+    "Suggestion": {
+      "title": "Suggestion",
+      "description": "Stores user-entered custom options for auto-saving dynamic dropdown lists",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fieldName": { "type": "string" },
+        "value": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "fieldName", "value", "createdAt"]
+    },
+    "Equipment": {
+      "title": "Equipment",
+      "description": "Tracks heavy mobile machinery and cranes assigned on different precast construction sites",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteId": { "type": "string" },
+        "siteNo": { "type": "string" },
+        "equipmentType": { "type": "string" },
+        "plateNo": { "type": "string" },
+        "capacity": { "type": "number" },
+        "status": { "type": "string", "enum": ["rented", "ARA"] },
+        "ownerName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "siteId", "siteNo", "equipmentType", "plateNo", "capacity", "status", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Represents a user profile with role-based access control and assigned sites",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "operator"] },
+        "assignedSiteIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "assignedSiteIds", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "sites/{siteId}": {
+      "schema": "Site",
+      "description": "Precast structural construction site metadata and identifiers"
+    },
+    "deliveries/{deliveryId}": {
+      "schema": "Delivery",
+      "description": "Receiving details for precast concrete deliverables"
+    },
+    "erections/{erectionId}": {
+      "schema": "Erection",
+      "description": "Erection progress metrics for precast components"
+    },
+    "suggestions/{suggestionId}": {
+      "schema": "Suggestion",
+      "description": "Autocompleted selections stored from real system usage"
+    },
+    "equipment/{equipmentId}": {
+      "schema": "Equipment",
+      "description": "Tracks cranes and heavy equipments rented or ARA with plate numbers and capacities"
+    },
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles containing roles and site assignments"
+    }
+  }
+}
