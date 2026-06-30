@@ -26,6 +26,7 @@ export default function SiteSelector({
   const [newSiteNo, setNewSiteNo] = useState("");
   const [newSiteName, setNewSiteName] = useState("");
   const [newProjectManager, setNewProjectManager] = useState("");
+  const [newSitePasscode, setNewSitePasscode] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,7 @@ export default function SiteSelector({
   const [editSiteNo, setEditSiteNo] = useState("");
   const [editSiteName, setEditSiteName] = useState("");
   const [editProjectManager, setEditProjectManager] = useState("");
+  const [editSitePasscode, setEditSitePasscode] = useState("");
   const [updating, setUpdating] = useState(false);
 
   // Delete confirm states
@@ -53,6 +55,7 @@ export default function SiteSelector({
         siteNo: newSiteNo.trim(),
         name: (newSiteName.trim() || `Site ${newSiteNo.trim()}`),
         projectManager: newProjectManager.trim() || "",
+        passcode: newSitePasscode.trim(),
         createdAt: new Date().toISOString()
       };
 
@@ -60,6 +63,7 @@ export default function SiteSelector({
       setNewSiteNo("");
       setNewSiteName("");
       setNewProjectManager("");
+      setNewSitePasscode("");
       setShowAddForm(false);
     } catch (err) {
       console.error("Error creating site:", err);
@@ -82,6 +86,7 @@ export default function SiteSelector({
         siteNo: editSiteNo.trim(),
         name: editSiteName.trim() || `Site ${editSiteNo.trim()}`,
         projectManager: editProjectManager.trim() || "",
+        passcode: editSitePasscode.trim(),
         updatedAt: new Date().toISOString()
       });
       setShowEditForm(false);
@@ -200,6 +205,7 @@ export default function SiteSelector({
                       setEditSiteNo(selectedSite.siteNo);
                       setEditSiteName(selectedSite.name);
                       setEditProjectManager(selectedSite.projectManager || "");
+                      setEditSitePasscode(selectedSite.passcode || "");
                       setShowEditForm(!showEditForm);
                       setShowAddForm(false);
                       setError(null);
@@ -266,7 +272,7 @@ export default function SiteSelector({
           )}
           <form
             onSubmit={handleSubmit}
-            className="flex flex-col sm:flex-row items-end gap-2.5 max-w-2xl"
+            className="flex flex-col sm:flex-row items-end gap-2.5 max-w-4xl"
           >
             <div className="flex-1 w-full">
               <label className="block text-[9px] font-bold text-slate-300 mb-1 uppercase tracking-wider">
@@ -305,6 +311,18 @@ export default function SiteSelector({
                 className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
               />
             </div>
+            <div className="flex-1 w-full">
+              <label className="block text-[9px] font-bold text-slate-300 mb-1 uppercase tracking-wider text-blue-400">
+                SITE PASSCODE (OPTIONAL)
+              </label>
+              <input
+                type="text"
+                value={newSitePasscode}
+                onChange={(e) => setNewSitePasscode(e.target.value)}
+                placeholder="e.g. 1234"
+                className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              />
+            </div>
             <div className="flex items-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0">
               <button
                 type="submit"
@@ -340,7 +358,7 @@ export default function SiteSelector({
           )}
           <form
             onSubmit={handleEditSubmit}
-            className="flex flex-col sm:flex-row items-end gap-2.5 max-w-2xl"
+            className="flex flex-col sm:flex-row items-end gap-2.5 max-w-4xl"
           >
             <div className="flex-1 w-full">
               <label className="block text-[9px] font-bold text-slate-300 mb-1 uppercase tracking-wider">
@@ -376,6 +394,18 @@ export default function SiteSelector({
                 value={editProjectManager}
                 onChange={(e) => setEditProjectManager(e.target.value)}
                 placeholder="e.g. Eng. Khalid"
+                className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-semibold"
+              />
+            </div>
+            <div className="flex-1 w-full">
+              <label className="block text-[9px] font-bold text-slate-300 mb-1 uppercase tracking-wider text-blue-400">
+                EDIT SITE PASSCODE (OPTIONAL)
+              </label>
+              <input
+                type="text"
+                value={editSitePasscode}
+                onChange={(e) => setEditSitePasscode(e.target.value)}
+                placeholder="e.g. 1234"
                 className="w-full bg-slate-950/60 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-semibold"
               />
             </div>

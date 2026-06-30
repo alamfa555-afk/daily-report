@@ -22,7 +22,7 @@ import config from "../../firebase-applet-config.json";
 const app = initializeApp(config);
 
 // Run with specific Firestore database ID provided in config
-export const db = getFirestore(app, config.firestoreDatabaseId);
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 export enum OperationType {

@@ -3,6 +3,7 @@ export interface Site {
   name: string;
   siteNo: string;
   projectManager?: string;
+  passcode?: string;
   createdAt: string;
 }
 
